@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ResellOS — Master Architecture Document</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,600;1,300&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,600;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0E14;
+    --bg2: #0F1520;
+    --bg3: #141C2A;
+    --border: rgba(0,180,255,0.12);
+    --border-bright: rgba(0,180,255,0.3);
+    --blue: #00B4FF;
+    --blue-dim: rgba(0,180,255,0.15);
+    --green: #00FF88;
+    --green-dim: rgba(0,255,136,0.12);
+    --amber: #FFB800;
+    --amber-dim: rgba(255,184,0,0.12);
+    --red: #FF4455;
+    --red-dim: rgba(255,68,85,0.12);
+    --purple: #AA88FF;
+    --purple-dim: rgba(170,136,255,0.12);
+    --text: #C8D8E8;
+    --text-dim: rgba(200,216,232,0.5);
+    --text-bright: #EEF4FA;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,180,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,180,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 60px 32px 120px;
+  }
+
+  /* Header */
+  .header {
+    margin-bottom: 64px;
+    padding-bottom: 40px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+
+  .header-tag {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--blue);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .header-title {
+    font-family: var(--mono);
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 600;
+    color: var(--text-bright);
+    line-height: 1;
+    letter-spacing: -0.03em;
+    margin-bottom: 8px;
+  }
+
+  .header-title span { color: var(--blue); }
+
+  .header-sub {
+    font-size: 0.9rem;
+    color: var(--text-dim);
+    font-weight: 300;
+    margin-bottom: 32px;
+    max-width: 600px;
+    line-height: 1.6;
+  }
+
+  .header-stats {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+
+  .hstat {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .hstat-val {
+    font-family: var(--mono);
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--green);
+  }
+
+  .hstat-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  /* Nav */
+  .nav {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 48px;
+    flex-wrap: wrap;
+    border: 1px solid var(--border);
+    padding: 4px;
+    background: var(--bg2);
+  }
+
+  .nav-btn {
+    background: transparent;
+    border: none;
+    padding: 8px 16px;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    cursor: pointer;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+
+  .nav-btn:hover { color: var(--blue); }
+  .nav-btn.active {
+    background: var(--blue-dim);
+    color: var(--blue);
+    border: 1px solid var(--border-bright);
+  }
+
+  /* Sections */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* Section headers */
+  .sec-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .sec-title {
+    font-family: var(--mono);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--blue);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .sec-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Cards */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 24px 28px;
+    margin-bottom: 16px;
+  }
+
+  .card-title {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--blue);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Decision log */
+  .decision {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--amber);
+    padding: 16px 20px;
+    margin-bottom: 12px;
+  }
+
+  .decision-title {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--amber);
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .decision-body {
+    font-size: 0.85rem;
+    color: var(--text);
+    line-height: 1.6;
+    font-weight: 300;
+  }
+
+  .decision-body strong { color: var(--text-bright); font-weight: 600; }
+
+  /* Database tables */
+  .db-table {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+
+  .db-table-header {
+    background: var(--blue-dim);
+    border-bottom: 1px solid var(--border-bright);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .db-table-header:hover { background: rgba(0,180,255,0.2); }
+
+  .db-table-name {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--blue);
+    flex: 1;
+  }
+
+  .db-table-desc {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    font-style: italic;
+  }
+
+  .db-chevron {
+    color: var(--blue);
+    font-size: 0.8rem;
+    transition: transform 0.2s;
+  }
+
+  .db-table.open .db-chevron { transform: rotate(180deg); }
+
+  .db-table-body {
+    display: none;
+    padding: 0;
+  }
+
+  .db-table.open .db-table-body { display: block; }
+
+  .db-field {
+    display: grid;
+    grid-template-columns: 200px 120px 1fr 100px;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 0.75rem;
+  }
+
+  .db-field:last-child { border-bottom: none; }
+
+  .db-field > div {
+    padding: 8px 16px;
+    border-right: 1px solid var(--border);
+  }
+
+  .db-field > div:last-child { border-right: none; }
+
+  .field-name { color: var(--text-bright); }
+  .field-type { color: var(--purple); }
+  .field-desc { color: var(--text-dim); font-family: var(--sans); font-size: 0.78rem; }
+  .field-flag { color: var(--green); font-size: 0.68rem; }
+
+  .db-field-header {
+    background: rgba(0,0,0,0.3);
+  }
+
+  .db-field-header > div {
+    color: var(--text-dim);
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 6px 16px;
+  }
+
+  /* Agent map */
+  .agent {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 20px 24px;
+    margin-bottom: 10px;
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+
+  .agent:hover { border-color: var(--border-bright); }
+  .agent.open { border-color: var(--blue); }
+
+  .agent-num {
+    font-family: var(--mono);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--blue);
+    min-width: 40px;
+    opacity: 0.5;
+  }
+
+  .agent-main { flex: 1; }
+
+  .agent-name {
+    font-family: var(--mono);
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-bright);
+    margin-bottom: 4px;
+  }
+
+  .agent-job {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    font-weight: 300;
+    line-height: 1.5;
+  }
+
+  .agent-detail {
+    display: none;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .agent.open .agent-detail { display: block; }
+
+  .agent-tags {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .tag {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border: 1px solid;
+  }
+
+  .tag-input { border-color: rgba(0,180,255,0.3); color: var(--blue); }
+  .tag-calc { border-color: rgba(0,255,136,0.3); color: var(--green); }
+  .tag-output { border-color: rgba(255,184,0,0.3); color: var(--amber); }
+  .tag-phase1 { border-color: rgba(0,255,136,0.3); color: var(--green); }
+  .tag-phase2 { border-color: rgba(255,184,0,0.3); color: var(--amber); }
+  .tag-premium { border-color: rgba(170,136,255,0.3); color: var(--purple); }
+  .tag-built { border-color: rgba(0,255,136,0.5); color: var(--green); background: var(--green-dim); }
+
+  /* Flow diagram */
+  .flow {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    padding: 28px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    line-height: 2;
+    color: var(--text);
+    margin-bottom: 16px;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  .flow .c-blue { color: var(--blue); }
+  .flow .c-green { color: var(--green); }
+  .flow .c-amber { color: var(--amber); }
+  .flow .c-purple { color: var(--purple); }
+  .flow .c-dim { color: var(--text-dim); }
+
+  /* Feature list */
+  .feat-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .feat-list li {
+    display: flex;
+    gap: 10px;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text);
+    font-weight: 300;
+  }
+
+  .feat-list li::before {
+    content: '→';
+    color: var(--blue);
+    flex-shrink: 0;
+    font-family: var(--mono);
+  }
+
+  .feat-list li strong { color: var(--text-bright); font-weight: 600; }
+
+  /* Onboarding */
+  .onboard-item {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    padding: 14px 18px;
+    margin-bottom: 8px;
+  }
+
+  .onboard-q {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--green);
+    margin-bottom: 4px;
+  }
+
+  .onboard-a {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    font-weight: 300;
+    line-height: 1.5;
+  }
+
+  /* Cost basis */
+  .cost-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    margin-top: 16px;
+  }
+
+  .cost-table th {
+    background: rgba(0,0,0,0.4);
+    color: var(--text-dim);
+    padding: 8px 14px;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-weight: 400;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cost-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-weight: 300;
+  }
+
+  .cost-table td:first-child { font-family: var(--mono); color: var(--blue); font-size: 0.78rem; }
+  .cost-table .neg { color: var(--green); font-family: var(--mono); }
+  .cost-table .total td { color: var(--text-bright); font-weight: 600; background: var(--blue-dim); }
+  .cost-table .total td:first-child { color: var(--blue); }
+
+  /* Stack */
+  .stack-item {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--blue);
+    padding: 14px 18px;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .stack-num {
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--blue);
+    min-width: 24px;
+    opacity: 0.6;
+  }
+
+  .stack-name {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-bright);
+    margin-bottom: 3px;
+  }
+
+  .stack-desc {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    font-weight: 300;
+    line-height: 1.5;
+  }
+
+  .stack-status {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    padding: 3px 8px;
+    border: 1px solid;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+
+  .status-done { border-color: rgba(0,255,136,0.4); color: var(--green); background: var(--green-dim); }
+  .status-next { border-color: rgba(0,180,255,0.4); color: var(--blue); }
+  .status-later { border-color: rgba(255,184,0,0.3); color: var(--amber); }
+
+  /* Footer */
+  .footer {
+    margin-top: 80px;
+    padding-top: 32px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .footer-name {
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    color: var(--blue);
+  }
+
+  .footer-meta {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+  }
+
+  @media (max-width: 700px) {
+    .wrap { padding: 32px 16px 80px; }
+    .db-field { grid-template-columns: 1fr 1fr; }
+    .db-field .field-desc, .db-field .field-flag { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-tag">// Master Architecture Document — v1.0</div>
+    <div class="header-title">Resell<span>OS</span></div>
+    <div class="header-sub">A multi-layer cost basis engine and business operating system for serious resellers. Built from 15 months of live experience. Starting with LEGO, designed to generalize.</div>
+    <div class="header-stats">
+      <div class="hstat"><div class="hstat-val">$160K</div><div class="hstat-label">Revenue proven</div></div>
+      <div class="hstat"><div class="hstat-val">$72K</div><div class="hstat-label">Net profit</div></div>
+      <div class="hstat"><div class="hstat-val">14</div><div class="hstat-label">Agents planned</div></div>
+      <div class="hstat"><div class="hstat-val">9</div><div class="hstat-label">DB tables</div></div>
+      <div class="hstat"><div class="hstat-val">FIFO</div><div class="hstat-label">Costing method</div></div>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <div class="nav">
+    <button class="nav-btn active" onclick="show('decisions')">Decisions</button>
+    <button class="nav-btn" onclick="show('database')">Database</button>
+    <button class="nav-btn" onclick="show('agents')">Agents</button>
+    <button class="nav-btn" onclick="show('costbasis')">Cost Basis</button>
+    <button class="nav-btn" onclick="show('taxrecovery')">Tax Recovery</button>
+    <button class="nav-btn" onclick="show('onboarding')">Onboarding</button>
+    <button class="nav-btn" onclick="show('stack')">Tech Stack</button>
+    <button class="nav-btn" onclick="show('dataflow')">Data Flow</button>
+  </div>
+
+  <!-- DECISIONS -->
+  <div class="section active" id="sec-decisions">
+    <div class="sec-header"><div class="sec-title">Architectural Decisions</div><div class="sec-line"></div></div>
+
+    <div class="decision">
+      <div class="decision-title">DECISION 001 — Database First</div>
+      <div class="decision-body">Google Sheets is the <strong>view layer</strong>, not the data layer. All truth lives in <strong>SQLite</strong> locally, upgrading to PostgreSQL at community launch. Sheets is a read-only window synced on demand. Reason: formulas break at scale, no audit trail, multi-user impossible in Sheets.</div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-title">DECISION 002 — Inventory Costing Method</div>
+      <div class="decision-body"><strong>FIFO (First In First Out)</strong> as default for all users. Specific Identification available as a <strong>premium feature</strong>. FIFO is IRS-accepted, auditable, and defensible. Critical for connecting purchase tax to sale for recovery reporting. Confirm with CPA before year-end.</div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-title">DECISION 003 — Email Input Simplified</div>
+      <div class="decision-body">Order confirmation emails are <strong>ignored</strong>. User manually inputs order number, gift card last 4, and rewards rate at time of purchase. <strong>Invoice PDF</strong> (from no-reply-billing03@lego.com) is parsed after shipment — contains set numbers, prices, GWP flags. Shipping confirmation parsed for tracking number only. Reduces complexity, increases reliability.</div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-title">DECISION 004 — Keepa Intelligence is Build 2</div>
+      <div class="decision-body">Keepa has no exportable data format. API dependency is a single point of failure. Keepa intelligence layer is a <strong>standalone Build 2</strong> — a premium community add-on separate from the OS core. OS functions fully without it.</div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-title">DECISION 005 — Sales Import via CSV/Excel</div>
+      <div class="decision-body">All platform sales imports (Walmart, Amazon, Bricklink, eBay) use <strong>CSV/Excel file exports</strong>, not APIs. APIs change terms, restrict access, deprecate endpoints. File exports are stable, user-controlled, and available on every platform today.</div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-title">DECISION 006 — Dedicated ResellOS Gmail</div>
+      <div class="decision-body">A <strong>separate Gmail account</strong> is created for ResellOS. Personal Gmail forwards LEGO invoices and shipping confirmations via filter rules. ResellOS Gmail is what connects to MCP — personal Gmail never touches the AI ecosystem. Correct pattern for community members to follow at onboarding.</div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-title">DECISION 007 — Tax Recovery at Launch</div>
+      <div class="decision-body">Sales tax recovery tracking is a <strong>launch feature</strong>, not v2. Value proposition: resellers spend $400-600/year on ResellOS and recover $5,000+ in sales tax. Washington state first. State-configurable at onboarding for other states. Companies currently charge 25% of recovered funds for this service — ResellOS automates the documentation and makes filing a one-click report.</div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-title">DECISION 008 — GWP and In-Store Flags on Line Items</div>
+      <div class="decision-body">GWP can occur in <strong>any channel</strong> — online or in-store. Tax exemption is determined by <strong>retailer certificate acceptance</strong>, not channel. Both are flags on the line item, not assumptions from purchase channel. In-store receipt parsing (OCR) is Phase 2.</div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-title">DECISION 009 — Tax Treatment User-Selected at Onboarding</div>
+      <div class="decision-body">How GWP proceeds, rewards, and cashback are treated for tax purposes is <strong>user-selected at onboarding</strong> based on CPA guidance. Options: conservative (income when received), cost reduction (reduces cost basis), or hybrid. System applies chosen treatment consistently. CPA conversation required before year-end.</div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-title">DECISION 010 — Build Environment</div>
+      <div class="decision-body">Primary: <strong>VS Code + Claude Code extension</strong>. Version control: <strong>GitHub</strong>. Runtime: <strong>Python</strong> with virtual environment per project. MCP connectors: filesystem → GitHub → Google Sheets → Gmail in priority order. Reason: single window, autonomous agent loop, eliminates context-switching friction.</div>
+    </div>
+  </div>
+
+  <!-- DATABASE -->
+  <div class="section" id="sec-database">
+    <div class="sec-header"><div class="sec-title">Database Schema — SQLite</div><div class="sec-line"></div></div>
+
+    <!-- Orders -->
+    <div class="db-table open">
+      <div class="db-table-header" onclick="toggleDB(this)">
+        <div class="db-table-name">orders</div>
+        <div class="db-table-desc">One row per order — online and in-store</div>
+        <div class="db-chevron">▾</div>
+      </div>
+      <div class="db-table-body">
+        <div class="db-field db-field-header"><div>Field</div><div>Type</div><div>Description</div><div>Flags</div></div>
+        <div class="db-field"><div class="field-name">order_id</div><div class="field-type">TEXT PK</div><div class="field-desc">LEGO order number e.g. T504036538</div><div class="field-flag">PRIMARY KEY</div></div>
+        <div class="db-field"><div class="field-name">invoice_number</div><div class="field-type">TEXT</div><div class="field-desc">Invoice number from receipt PDF</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">order_date</div><div class="field-type">DATE</div><div class="field-desc">Date order was placed</div><div class="field-flag">NOT NULL</div></div>
+        <div class="db-field"><div class="field-name">invoice_date</div><div class="field-type">DATE</div><div class="field-desc">Date invoice was generated</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">retailer</div><div class="field-type">TEXT</div><div class="field-desc">LEGO / Walmart / Barnes / Kohls etc</div><div class="field-flag">NOT NULL</div></div>
+        <div class="db-field"><div class="field-name">purchase_channel</div><div class="field-type">TEXT</div><div class="field-desc">online | in_store</div><div class="field-flag">NOT NULL</div></div>
+        <div class="db-field"><div class="field-name">gift_card_last4</div><div class="field-type">TEXT</div><div class="field-desc">Last 4 digits of gift card used</div><div class="field-flag">USER INPUT</div></div>
+        <div class="db-field"><div class="field-name">gift_card_discount_pct</div><div class="field-type">REAL</div><div class="field-desc">% discount on gift card purchase e.g. 10.0</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">rewards_rate</div><div class="field-type">REAL</div><div class="field-desc">5.0 / 10.0 / 20.0 — user input at order</div><div class="field-flag">USER INPUT</div></div>
+        <div class="db-field"><div class="field-name">insider_points_redeemed</div><div class="field-type">REAL</div><div class="field-desc">Dollar value of insider points applied</div><div class="field-flag">FROM INVOICE</div></div>
+        <div class="db-field"><div class="field-name">subtotal</div><div class="field-type">REAL</div><div class="field-desc">Pre-tax order subtotal</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">tax</div><div class="field-type">REAL</div><div class="field-desc">Tax charged on order</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">order_total</div><div class="field-type">REAL</div><div class="field-desc">Final invoice total</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">payment_method</div><div class="field-type">TEXT</div><div class="field-desc">gift_card | credit_card | cash | mixed</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">rakuten_rate</div><div class="field-type">REAL</div><div class="field-desc">Cashback % for this order — user input</div><div class="field-flag">USER INPUT</div></div>
+        <div class="db-field"><div class="field-name">status</div><div class="field-type">TEXT</div><div class="field-desc">pending_invoice | active | complete</div><div class="field-flag">NOT NULL</div></div>
+        <div class="db-field"><div class="field-name">tax_treatment</div><div class="field-type">TEXT</div><div class="field-desc">Inherits from user onboarding setting</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">created_at</div><div class="field-type">DATETIME</div><div class="field-desc">Record creation timestamp</div><div class="field-flag">AUTO</div></div>
+      </div>
+    </div>
+
+    <!-- Line Items -->
+    <div class="db-table">
+      <div class="db-table-header" onclick="toggleDB(this)">
+        <div class="db-table-name">line_items</div>
+        <div class="db-table-desc">One row per set per order — connected to orders by order_id</div>
+        <div class="db-chevron">▾</div>
+      </div>
+      <div class="db-table-body">
+        <div class="db-field db-field-header"><div>Field</div><div>Type</div><div>Description</div><div>Flags</div></div>
+        <div class="db-field"><div class="field-name">line_item_id</div><div class="field-type">INTEGER PK</div><div class="field-desc">Auto-incrementing identifier</div><div class="field-flag">PRIMARY KEY</div></div>
+        <div class="db-field"><div class="field-name">order_id</div><div class="field-type">TEXT FK</div><div class="field-desc">Links to orders table</div><div class="field-flag">FOREIGN KEY</div></div>
+        <div class="db-field"><div class="field-name">article_number</div><div class="field-type">TEXT</div><div class="field-desc">LEGO article number e.g. 6378942</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">set_number</div><div class="field-type">TEXT</div><div class="field-desc">LEGO set number e.g. 75337</div><div class="field-flag">INDEXED</div></div>
+        <div class="db-field"><div class="field-name">description</div><div class="field-type">TEXT</div><div class="field-desc">Product description from invoice</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">quantity</div><div class="field-type">INTEGER</div><div class="field-desc">Units purchased</div><div class="field-flag">NOT NULL</div></div>
+        <div class="db-field"><div class="field-name">unit_price</div><div class="field-type">REAL</div><div class="field-desc">Original retail price per unit</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">discount_amount</div><div class="field-type">REAL</div><div class="field-desc">Per-unit discount applied on invoice</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">net_price</div><div class="field-type">REAL</div><div class="field-desc">Price after discount per unit</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">line_total</div><div class="field-type">REAL</div><div class="field-desc">net_price × quantity</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">is_gwp</div><div class="field-type">BOOLEAN</div><div class="field-desc">True if price = Free/0.00 on invoice</div><div class="field-flag">INDEXED</div></div>
+        <div class="db-field"><div class="field-name">tax_allocated</div><div class="field-type">REAL</div><div class="field-desc">Proportional tax allocated to this line</div><div class="field-flag">CALCULATED</div></div>
+        <div class="db-field"><div class="field-name">tax_exempt</div><div class="field-type">BOOLEAN</div><div class="field-desc">Was reseller cert applied to this item</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">tax_recovery_eligible</div><div class="field-type">BOOLEAN</div><div class="field-desc">Tax paid + cert applies = recoverable</div><div class="field-flag">CALCULATED</div></div>
+      </div>
+    </div>
+
+    <!-- Inventory -->
+    <div class="db-table">
+      <div class="db-table-header" onclick="toggleDB(this)">
+        <div class="db-table-name">inventory</div>
+        <div class="db-table-desc">One row per physical unit — tracks from receipt to sale</div>
+        <div class="db-chevron">▾</div>
+      </div>
+      <div class="db-table-body">
+        <div class="db-field db-field-header"><div>Field</div><div>Type</div><div>Description</div><div>Flags</div></div>
+        <div class="db-field"><div class="field-name">unit_id</div><div class="field-type">INTEGER PK</div><div class="field-desc">Unique identifier for this physical unit</div><div class="field-flag">PRIMARY KEY</div></div>
+        <div class="db-field"><div class="field-name">line_item_id</div><div class="field-type">INTEGER FK</div><div class="field-desc">Links to line_items table</div><div class="field-flag">FOREIGN KEY</div></div>
+        <div class="db-field"><div class="field-name">order_id</div><div class="field-type">TEXT FK</div><div class="field-desc">Which order this unit came from</div><div class="field-flag">FOREIGN KEY</div></div>
+        <div class="db-field"><div class="field-name">set_number</div><div class="field-type">TEXT</div><div class="field-desc">For quick lookup without joining</div><div class="field-flag">INDEXED</div></div>
+        <div class="db-field"><div class="field-name">retailer</div><div class="field-type">TEXT</div><div class="field-desc">Source retailer for this unit</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">purchase_date</div><div class="field-type">DATE</div><div class="field-desc">When purchased — FIFO sort key</div><div class="field-flag">INDEXED</div></div>
+        <div class="db-field"><div class="field-name">true_cost_basis</div><div class="field-type">REAL</div><div class="field-desc">Final cost after all 4 discount layers</div><div class="field-flag">CALCULATED</div></div>
+        <div class="db-field"><div class="field-name">costing_method</div><div class="field-type">TEXT</div><div class="field-desc">fifo | specific_id</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">box_number</div><div class="field-type">INTEGER</div><div class="field-desc">Physical storage box number</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">location_status</div><div class="field-type">TEXT</div><div class="field-desc">in_storage | sealed | in_transit | at_fulfillment | sold</div><div class="field-flag">INDEXED</div></div>
+        <div class="db-field"><div class="field-name">sale_id</div><div class="field-type">INTEGER FK</div><div class="field-desc">Links to sales when sold. NULL until sold.</div><div class="field-flag">NULLABLE</div></div>
+        <div class="db-field"><div class="field-name">tax_paid</div><div class="field-type">REAL</div><div class="field-desc">Actual tax paid on this unit</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">tax_recovery_status</div><div class="field-type">TEXT</div><div class="field-desc">not_eligible | eligible | claimed | reimbursed</div><div class="field-flag">INDEXED</div></div>
+      </div>
+    </div>
+
+    <!-- Sales -->
+    <div class="db-table">
+      <div class="db-table-header" onclick="toggleDB(this)">
+        <div class="db-table-name">sales</div>
+        <div class="db-table-desc">One row per unit sold — connects to inventory</div>
+        <div class="db-chevron">▾</div>
+      </div>
+      <div class="db-table-body">
+        <div class="db-field db-field-header"><div>Field</div><div>Type</div><div>Description</div><div>Flags</div></div>
+        <div class="db-field"><div class="field-name">sale_id</div><div class="field-type">INTEGER PK</div><div class="field-desc">Auto-incrementing sale identifier</div><div class="field-flag">PRIMARY KEY</div></div>
+        <div class="db-field"><div class="field-name">unit_id</div><div class="field-type">INTEGER FK</div><div class="field-desc">Which inventory unit was sold</div><div class="field-flag">FOREIGN KEY</div></div>
+        <div class="db-field"><div class="field-name">set_number</div><div class="field-type">TEXT</div><div class="field-desc">For quick lookup</div><div class="field-flag">INDEXED</div></div>
+        <div class="db-field"><div class="field-name">platform</div><div class="field-type">TEXT</div><div class="field-desc">walmart | amazon | bricklink | ebay</div><div class="field-flag">INDEXED</div></div>
+        <div class="db-field"><div class="field-name">sale_date</div><div class="field-type">DATE</div><div class="field-desc">When sold</div><div class="field-flag">NOT NULL</div></div>
+        <div class="db-field"><div class="field-name">sale_price</div><div class="field-type">REAL</div><div class="field-desc">Gross sale price</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">platform_fees</div><div class="field-type">REAL</div><div class="field-desc">Platform commission and fees</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">shipping_cost</div><div class="field-type">REAL</div><div class="field-desc">Outbound shipping if applicable</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">net_proceeds</div><div class="field-type">REAL</div><div class="field-desc">sale_price - fees - shipping</div><div class="field-flag">CALCULATED</div></div>
+        <div class="db-field"><div class="field-name">true_cost_basis</div><div class="field-type">REAL</div><div class="field-desc">Copied from inventory at time of sale</div><div class="field-flag">IMMUTABLE</div></div>
+        <div class="db-field"><div class="field-name">actual_profit</div><div class="field-type">REAL</div><div class="field-desc">net_proceeds - true_cost_basis</div><div class="field-flag">CALCULATED</div></div>
+        <div class="db-field"><div class="field-name">roi_pct</div><div class="field-type">REAL</div><div class="field-desc">actual_profit / true_cost_basis × 100</div><div class="field-flag">CALCULATED</div></div>
+      </div>
+    </div>
+
+    <!-- Gift Cards -->
+    <div class="db-table">
+      <div class="db-table-header" onclick="toggleDB(this)">
+        <div class="db-table-name">gift_cards</div>
+        <div class="db-table-desc">Gift card ledger — one row per card, tabbed by retailer in UI</div>
+        <div class="db-chevron">▾</div>
+      </div>
+      <div class="db-table-body">
+        <div class="db-field db-field-header"><div>Field</div><div>Type</div><div>Description</div><div>Flags</div></div>
+        <div class="db-field"><div class="field-name">card_id</div><div class="field-type">INTEGER PK</div><div class="field-desc">Auto-incrementing identifier</div><div class="field-flag">PRIMARY KEY</div></div>
+        <div class="db-field"><div class="field-name">retailer</div><div class="field-type">TEXT</div><div class="field-desc">LEGO / Walmart / Barnes / Kohls / Macys</div><div class="field-flag">INDEXED</div></div>
+        <div class="db-field"><div class="field-name">last_four</div><div class="field-type">TEXT</div><div class="field-desc">Last 4 digits for identification</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">face_value</div><div class="field-type">REAL</div><div class="field-desc">Card face value</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">price_paid</div><div class="field-type">REAL</div><div class="field-desc">What you paid for the card</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">discount_pct</div><div class="field-type">REAL</div><div class="field-desc">Calculated: (face-paid)/face × 100</div><div class="field-flag">CALCULATED</div></div>
+        <div class="db-field"><div class="field-name">date_purchased</div><div class="field-type">DATE</div><div class="field-desc">When card was purchased</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">balance_remaining</div><div class="field-type">REAL</div><div class="field-desc">Current usable balance</div><div class="field-flag">UPDATED ON USE</div></div>
+        <div class="db-field"><div class="field-name">status</div><div class="field-type">TEXT</div><div class="field-desc">available | partial | depleted</div><div class="field-flag">INDEXED</div></div>
+      </div>
+    </div>
+
+    <!-- Rewards -->
+    <div class="db-table">
+      <div class="db-table-header" onclick="toggleDB(this)">
+        <div class="db-table-name">rewards_transactions</div>
+        <div class="db-table-desc">Every earn and spend event per retailer rewards pool</div>
+        <div class="db-chevron">▾</div>
+      </div>
+      <div class="db-table-body">
+        <div class="db-field db-field-header"><div>Field</div><div>Type</div><div>Description</div><div>Flags</div></div>
+        <div class="db-field"><div class="field-name">txn_id</div><div class="field-type">INTEGER PK</div><div class="field-desc">Auto-incrementing identifier</div><div class="field-flag">PRIMARY KEY</div></div>
+        <div class="db-field"><div class="field-name">retailer</div><div class="field-type">TEXT</div><div class="field-desc">Which retailer pool</div><div class="field-flag">INDEXED</div></div>
+        <div class="db-field"><div class="field-name">order_id</div><div class="field-type">TEXT FK</div><div class="field-desc">Order that generated or used rewards</div><div class="field-flag">FOREIGN KEY</div></div>
+        <div class="db-field"><div class="field-name">txn_type</div><div class="field-type">TEXT</div><div class="field-desc">earned | spent | expired</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">amount</div><div class="field-type">REAL</div><div class="field-desc">Dollar value of transaction</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">rate_applied</div><div class="field-type">REAL</div><div class="field-desc">Rate in effect — 5/10/20%</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">txn_date</div><div class="field-type">DATE</div><div class="field-desc">When transaction occurred</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">pool_balance_after</div><div class="field-type">REAL</div><div class="field-desc">Running pool balance after this event</div><div class="field-flag">CALCULATED</div></div>
+      </div>
+    </div>
+
+    <!-- Cashback -->
+    <div class="db-table">
+      <div class="db-table-header" onclick="toggleDB(this)">
+        <div class="db-table-name">cashback_transactions</div>
+        <div class="db-table-desc">Rakuten and external cashback — quarterly payout tracking</div>
+        <div class="db-chevron">▾</div>
+      </div>
+      <div class="db-table-body">
+        <div class="db-field db-field-header"><div>Field</div><div>Type</div><div>Description</div><div>Flags</div></div>
+        <div class="db-field"><div class="field-name">cb_id</div><div class="field-type">INTEGER PK</div><div class="field-desc">Auto-incrementing identifier</div><div class="field-flag">PRIMARY KEY</div></div>
+        <div class="db-field"><div class="field-name">platform</div><div class="field-type">TEXT</div><div class="field-desc">rakuten | other</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">order_id</div><div class="field-type">TEXT FK</div><div class="field-desc">Order that earned cashback</div><div class="field-flag">FOREIGN KEY</div></div>
+        <div class="db-field"><div class="field-name">rate_applied</div><div class="field-type">REAL</div><div class="field-desc">Cashback % — 2.5 to 15</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">amount_earned</div><div class="field-type">REAL</div><div class="field-desc">Dollar value earned</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">expected_payout_quarter</div><div class="field-type">TEXT</div><div class="field-desc">Q1/Q2/Q3/Q4-YYYY</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">actual_receipt_date</div><div class="field-type">DATE</div><div class="field-desc">When cashback was received. NULL until paid.</div><div class="field-flag">NULLABLE</div></div>
+        <div class="db-field"><div class="field-name">status</div><div class="field-type">TEXT</div><div class="field-desc">pending | received | allocated</div><div class="field-flag">INDEXED</div></div>
+      </div>
+    </div>
+
+    <!-- GWP -->
+    <div class="db-table">
+      <div class="db-table-header" onclick="toggleDB(this)">
+        <div class="db-table-name">gwp</div>
+        <div class="db-table-desc">Gift with purchase tracking — deferred allocation to paid sets</div>
+        <div class="db-chevron">▾</div>
+      </div>
+      <div class="db-table-body">
+        <div class="db-field db-field-header"><div>Field</div><div>Type</div><div>Description</div><div>Flags</div></div>
+        <div class="db-field"><div class="field-name">gwp_id</div><div class="field-type">INTEGER PK</div><div class="field-desc">Auto-incrementing identifier</div><div class="field-flag">PRIMARY KEY</div></div>
+        <div class="db-field"><div class="field-name">order_id</div><div class="field-type">TEXT FK</div><div class="field-desc">Order the GWP came with</div><div class="field-flag">FOREIGN KEY</div></div>
+        <div class="db-field"><div class="field-name">set_number</div><div class="field-type">TEXT</div><div class="field-desc">GWP set number</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">description</div><div class="field-type">TEXT</div><div class="field-desc">GWP set description</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">retail_value</div><div class="field-type">REAL</div><div class="field-desc">LEGO retail price (reference only)</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">net_proceeds</div><div class="field-type">REAL</div><div class="field-desc">Actual net after fees when sold</div><div class="field-flag">USER INPUT ON SALE</div></div>
+        <div class="db-field"><div class="field-name">sale_date</div><div class="field-type">DATE</div><div class="field-desc">When GWP was sold</div><div class="field-flag">NULLABLE</div></div>
+        <div class="db-field"><div class="field-name">allocation_status</div><div class="field-type">TEXT</div><div class="field-desc">pending | allocated</div><div class="field-flag">INDEXED</div></div>
+        <div class="db-field"><div class="field-name">allocated_per_paid_unit</div><div class="field-type">REAL</div><div class="field-desc">Proceeds / paid units on order</div><div class="field-flag">CALCULATED</div></div>
+      </div>
+    </div>
+
+    <!-- Tax Recovery -->
+    <div class="db-table">
+      <div class="db-table-header" onclick="toggleDB(this)">
+        <div class="db-table-name">tax_recovery</div>
+        <div class="db-table-desc">Quarterly tax recovery tracking — Washington state first</div>
+        <div class="db-chevron">▾</div>
+      </div>
+      <div class="db-table-body">
+        <div class="db-field db-field-header"><div>Field</div><div>Type</div><div>Description</div><div>Flags</div></div>
+        <div class="db-field"><div class="field-name">recovery_id</div><div class="field-type">INTEGER PK</div><div class="field-desc">Auto-incrementing identifier</div><div class="field-flag">PRIMARY KEY</div></div>
+        <div class="db-field"><div class="field-name">unit_id</div><div class="field-type">INTEGER FK</div><div class="field-desc">Which inventory unit</div><div class="field-flag">FOREIGN KEY</div></div>
+        <div class="db-field"><div class="field-name">order_id</div><div class="field-type">TEXT FK</div><div class="field-desc">Original purchase order</div><div class="field-flag">FOREIGN KEY</div></div>
+        <div class="db-field"><div class="field-name">sale_id</div><div class="field-type">INTEGER FK</div><div class="field-desc">Sale that triggered eligibility</div><div class="field-flag">FOREIGN KEY</div></div>
+        <div class="db-field"><div class="field-name">set_number</div><div class="field-type">TEXT</div><div class="field-desc">For report readability</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">retailer</div><div class="field-type">TEXT</div><div class="field-desc">Where purchased</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">purchase_date</div><div class="field-type">DATE</div><div class="field-desc">When purchased</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">tax_paid</div><div class="field-type">REAL</div><div class="field-desc">Actual tax paid on this unit</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">sale_date</div><div class="field-type">DATE</div><div class="field-desc">When sold — triggers eligibility</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">recovery_period</div><div class="field-type">TEXT</div><div class="field-desc">Q1/Q2/Q3/Q4-YYYY filing period</div><div class="field-flag">INDEXED</div></div>
+        <div class="db-field"><div class="field-name">state</div><div class="field-type">TEXT</div><div class="field-desc">WA / OR / CA etc — state-specific rules</div><div class="field-flag"></div></div>
+        <div class="db-field"><div class="field-name">status</div><div class="field-type">TEXT</div><div class="field-desc">eligible | filed | reimbursed</div><div class="field-flag">INDEXED</div></div>
+        <div class="db-field"><div class="field-name">reimbursement_date</div><div class="field-type">DATE</div><div class="field-desc">When state paid back. NULL until received.</div><div class="field-flag">NULLABLE</div></div>
+        <div class="db-field"><div class="field-name">reimbursement_amount</div><div class="field-type">REAL</div><div class="field-desc">Actual amount received from state</div><div class="field-flag">NULLABLE</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- AGENTS -->
+  <div class="section" id="sec-agents">
+    <div class="sec-header"><div class="sec-title">Agent Map</div><div class="sec-line"></div></div>
+
+    <div class="agent open" onclick="toggleAgent(this)">
+      <div class="agent-num">01A</div>
+      <div class="agent-main">
+        <div class="agent-name">LEGO Online Invoice Parser</div>
+        <div class="agent-job">Reads LEGO invoice PDF from no-reply-billing03@lego.com. Extracts all fields. Writes to orders and line_items tables.</div>
+        <div class="agent-detail">
+          <div class="agent-tags">
+            <span class="tag tag-input">Input</span>
+            <span class="tag tag-built">Built ✓</span>
+            <span class="tag tag-phase1">Phase 1</span>
+          </div>
+          <ul class="feat-list" style="margin-top:12px;">
+            <li><strong>Handles:</strong> Standard orders, GWP (Free flag), discount column, insider points redeemed, gift card and credit card payment, split shipments</li>
+            <li><strong>Output:</strong> Structured order record matched to manually entered order by order number</li>
+            <li><strong>Edge cases handled:</strong> No GWP orders, quantity > 1, multiple payment methods</li>
+            <li><strong>Next step:</strong> Connect output to SQLite instead of console</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent" onclick="toggleAgent(this)">
+      <div class="agent-num">01B</div>
+      <div class="agent-main">
+        <div class="agent-name">In-Store Receipt Scanner</div>
+        <div class="agent-job">OCR reader for photographed or emailed in-store receipts. Handles Walmart, LEGO store, Barnes & Noble receipt formats.</div>
+        <div class="agent-detail">
+          <div class="agent-tags">
+            <span class="tag tag-input">Input</span>
+            <span class="tag tag-phase2">Phase 2</span>
+          </div>
+          <ul class="feat-list" style="margin-top:12px;">
+            <li><strong>Input:</strong> Photo upload or emailed receipt forwarded to ResellOS Gmail</li>
+            <li><strong>Note:</strong> GWP can occur in-store. Tax exempt depends on retailer certificate acceptance, not channel.</li>
+            <li><strong>Output:</strong> Same order/line_item structure as Agent 1A</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent" onclick="toggleAgent(this)">
+      <div class="agent-num">02</div>
+      <div class="agent-main">
+        <div class="agent-name">Manual Order Entry</div>
+        <div class="agent-job">User interface for entering order at time of purchase. Captures order number, gift card last 4, rewards rate. Creates pending order record awaiting invoice.</div>
+        <div class="agent-detail">
+          <div class="agent-tags">
+            <span class="tag tag-input">Input</span>
+            <span class="tag tag-phase1">Phase 1</span>
+          </div>
+          <ul class="feat-list" style="margin-top:12px;">
+            <li><strong>Fields:</strong> Order number, retailer, gift card last 4, rewards rate (5%/2X/4X), Rakuten rate, order date</li>
+            <li><strong>Status set to:</strong> pending_invoice until Agent 1A matches and populates line items</li>
+            <li><strong>Rewards rate:</strong> Defaults to 5%, user adjusts for promotional events</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent" onclick="toggleAgent(this)">
+      <div class="agent-num">03</div>
+      <div class="agent-main">
+        <div class="agent-name">Shipping Confirmation Parser</div>
+        <div class="agent-job">Reads shipping confirmation email. Extracts tracking number and carrier only. Updates existing order record. Supports multiple tracking numbers per order for split shipments.</div>
+        <div class="agent-detail">
+          <div class="agent-tags">
+            <span class="tag tag-input">Input</span>
+            <span class="tag tag-phase1">Phase 1</span>
+          </div>
+          <ul class="feat-list" style="margin-top:12px;">
+            <li><strong>Matches to order by:</strong> Order number in email subject or body</li>
+            <li><strong>Adds to order:</strong> Tracking number, carrier, estimated arrival</li>
+            <li><strong>Split shipments:</strong> Multiple tracking numbers stored per order</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent" onclick="toggleAgent(this)">
+      <div class="agent-num">04</div>
+      <div class="agent-main">
+        <div class="agent-name">Cost Basis Engine</div>
+        <div class="agent-job">Calculates true cost basis per unit applying all four discount layers. Runs when invoice is matched and when GWP/rewards/cashback events complete.</div>
+        <div class="agent-detail">
+          <div class="agent-tags">
+            <span class="tag tag-calc">Calculation</span>
+            <span class="tag tag-phase1">Phase 1</span>
+          </div>
+          <ul class="feat-list" style="margin-top:12px;">
+            <li><strong>Layer 1:</strong> Gift card discount % applied to order total</li>
+            <li><strong>Layer 2:</strong> Retailer rewards allocated when spent from pool</li>
+            <li><strong>Layer 3:</strong> Rakuten cashback allocated when received from pool</li>
+            <li><strong>Layer 4:</strong> GWP net proceeds allocated proportionally to paid sets when sold</li>
+            <li><strong>Output:</strong> true_cost_basis per unit in inventory table</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent" onclick="toggleAgent(this)">
+      <div class="agent-num">05</div>
+      <div class="agent-main">
+        <div class="agent-name">Tax Allocation Engine</div>
+        <div class="agent-job">Allocates order-level tax proportionally to each paid line item. Flags items for tax recovery eligibility based on retailer certificate status.</div>
+        <div class="agent-detail">
+          <div class="agent-tags">
+            <span class="tag tag-calc">Calculation</span>
+            <span class="tag tag-phase1">Phase 1</span>
+          </div>
+          <ul class="feat-list" style="margin-top:12px;">
+            <li><strong>Allocation method:</strong> Line item share of subtotal × order tax</li>
+            <li><strong>GWP items:</strong> Zero tax allocated (no cost basis)</li>
+            <li><strong>Recovery eligible:</strong> Tax paid + retailer cert on file = eligible</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent" onclick="toggleAgent(this)">
+      <div class="agent-num">06</div>
+      <div class="agent-main">
+        <div class="agent-name">Rewards Pool Manager</div>
+        <div class="agent-job">Manages earn and spend cycle for each retailer's rewards pool. Variable rates per order. Tracks pool balance as a real asset.</div>
+        <div class="agent-detail">
+          <div class="agent-tags">
+            <span class="tag tag-calc">Calculation</span>
+            <span class="tag tag-phase1">Phase 1</span>
+          </div>
+          <ul class="feat-list" style="margin-top:12px;">
+            <li><strong>Separate pools:</strong> LEGO Insider, Kohl's Cash, B&N Rewards, Macy's Star</li>
+            <li><strong>Earn:</strong> Order pretax subtotal × order rewards rate → pool balance</li>
+            <li><strong>Spend:</strong> Drawn from pool, allocated proportionally to receiving order's sets</li>
+            <li><strong>Insider Points Redeem:</strong> Auto-detected from invoice, recorded as spend event</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent" onclick="toggleAgent(this)">
+      <div class="agent-num">07</div>
+      <div class="agent-main">
+        <div class="agent-name">Cashback Pool Manager</div>
+        <div class="agent-job">Tracks Rakuten and external cashback. Quarterly payout cycles. Allocates received cashback back to originating orders.</div>
+        <div class="agent-detail">
+          <div class="agent-tags">
+            <span class="tag tag-calc">Calculation</span>
+            <span class="tag tag-phase1">Phase 1</span>
+          </div>
+          <ul class="feat-list" style="margin-top:12px;">
+            <li><strong>Rate range:</strong> 2.5% to 15% — set per order by user</li>
+            <li><strong>Payout tracking:</strong> Expected quarter vs actual receipt date</li>
+            <li><strong>On receipt:</strong> Allocates back to orders that earned it, updates cost basis</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent" onclick="toggleAgent(this)">
+      <div class="agent-num">08</div>
+      <div class="agent-main">
+        <div class="agent-name">GWP Allocation Engine</div>
+        <div class="agent-job">Tracks free sets from purchase to sale. Allocates net proceeds proportionally to paid sets on the originating order when GWP sells.</div>
+        <div class="agent-detail">
+          <div class="agent-tags">
+            <span class="tag tag-calc">Calculation</span>
+            <span class="tag tag-phase1">Phase 1</span>
+          </div>
+          <ul class="feat-list" style="margin-top:12px;">
+            <li><strong>GWP identification:</strong> Price = Free/0.00 on invoice — auto-flagged by parser</li>
+            <li><strong>Proceeds input:</strong> User enters actual net after fees and shipping when GWP sells</li>
+            <li><strong>Allocation:</strong> Net proceeds ÷ paid units on order = reduction per paid unit</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent" onclick="toggleAgent(this)">
+      <div class="agent-num">09</div>
+      <div class="agent-main">
+        <div class="agent-name">Sales Importer</div>
+        <div class="agent-job">Reads CSV/Excel exports from Walmart, Amazon, Bricklink, eBay. Matches sales to inventory units. Calculates true profit per sale.</div>
+        <div class="agent-detail">
+          <div class="agent-tags">
+            <span class="tag tag-input">Input</span>
+            <span class="tag tag-phase1">Phase 1</span>
+          </div>
+          <ul class="feat-list" style="margin-top:12px;">
+            <li><strong>Method:</strong> CSV/Excel file upload — no API dependency</li>
+            <li><strong>Matching:</strong> Sale matched to inventory unit by set number + FIFO purchase date</li>
+            <li><strong>Output:</strong> sales table populated, inventory unit marked sold, tax recovery eligibility triggered</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent" onclick="toggleAgent(this)">
+      <div class="agent-num">10</div>
+      <div class="agent-main">
+        <div class="agent-name">Tax Recovery Report Generator</div>
+        <div class="agent-job">Quarterly report of all sold units with recoverable tax paid. Formatted for Washington state filing. State-configurable at onboarding.</div>
+        <div class="agent-detail">
+          <div class="agent-tags">
+            <span class="tag tag-output">Output</span>
+            <span class="tag tag-phase1">Phase 1 — Launch Feature</span>
+          </div>
+          <ul class="feat-list" style="margin-top:12px;">
+            <li><strong>Trigger:</strong> End of quarter or user request</li>
+            <li><strong>Contents:</strong> Purchase date, retailer, set, tax paid, sale date, platform per unit</li>
+            <li><strong>Value:</strong> Recovers $5,000+ annually for WA state resellers — headline feature</li>
+            <li><strong>Status tracking:</strong> eligible → filed → reimbursed per unit</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent" onclick="toggleAgent(this)">
+      <div class="agent-num">11</div>
+      <div class="agent-main">
+        <div class="agent-name">Google Sheets Sync</div>
+        <div class="agent-job">Reads from SQLite, writes human-readable views to Google Sheets. On-demand sync. Sheets is the window, not the truth.</div>
+        <div class="agent-detail">
+          <div class="agent-tags">
+            <span class="tag tag-output">Output</span>
+            <span class="tag tag-phase1">Phase 1</span>
+          </div>
+          <ul class="feat-list" style="margin-top:12px;">
+            <li><strong>Sheets tabs populated:</strong> Dashboard, Orders, Inventory, Sales, GWP Tracker, Reports, Performance</li>
+            <li><strong>Sheets is read-only:</strong> No editing in Sheets — all data entry through OS</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent" onclick="toggleAgent(this)">
+      <div class="agent-num">12</div>
+      <div class="agent-main">
+        <div class="agent-name">Performance Dashboard</div>
+        <div class="agent-job">Aggregated intelligence layer. ROI by set, retailer, platform. Best performing GWPs. Capital deployment recommendations.</div>
+        <div class="agent-detail">
+          <div class="agent-tags">
+            <span class="tag tag-output">Output</span>
+            <span class="tag tag-phase2">Phase 2</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent" onclick="toggleAgent(this)">
+      <div class="agent-num">13</div>
+      <div class="agent-main">
+        <div class="agent-name">Keepa Intelligence Layer</div>
+        <div class="agent-job">Standalone Build 2. Watchlist scanning, demand/supply signals, buy grader integrated with cost basis engine. Premium community add-on.</div>
+        <div class="agent-detail">
+          <div class="agent-tags">
+            <span class="tag tag-phase2">Build 2</span>
+            <span class="tag tag-premium">Premium</span>
+          </div>
+          <ul class="feat-list" style="margin-top:12px;">
+            <li><strong>Dependency:</strong> Keepa API — single point of failure risk noted</li>
+            <li><strong>Separate from OS core:</strong> OS functions fully without this agent</li>
+            <li><strong>Community pricing:</strong> Lower cost for OS members vs standalone</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent" onclick="toggleAgent(this)">
+      <div class="agent-num">14</div>
+      <div class="agent-main">
+        <div class="agent-name">Specific Identification Engine</div>
+        <div class="agent-job">Premium upgrade to FIFO. Tracks individual units by source. Enables precise tax recovery when units from different retailers are mixed in inventory.</div>
+        <div class="agent-detail">
+          <div class="agent-tags">
+            <span class="tag tag-phase2">Phase 2</span>
+            <span class="tag tag-premium">Premium</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- COST BASIS -->
+  <div class="section" id="sec-costbasis">
+    <div class="sec-header"><div class="sec-title">Cost Basis Engine — Four Layers</div><div class="sec-line"></div></div>
+
+    <div class="card">
+      <div class="card-title">// Real Example — Order T503829514</div>
+      <table class="cost-table">
+        <thead>
+          <tr><th>Layer</th><th>Description</th><th>Amount</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Invoice Total</td><td>Base purchase cost including tax</td><td>$180.42</td></tr>
+          <tr><td>Gift Card Discount</td><td>Card purchased at 90% face value — 10% savings</td><td class="neg">-$18.04</td></tr>
+          <tr><td>Insider Rewards Earned</td><td>5% of $162.98 pretax — flows to pool</td><td class="neg">-$8.15 (deferred)</td></tr>
+          <tr><td>Rakuten Cashback</td><td>2.5% of pretax — quarterly payout</td><td class="neg">-$4.07 (deferred)</td></tr>
+          <tr><td>GWP Net Proceeds</td><td>Darksaber + Razor Crest net when sold</td><td class="neg">-$XX.XX (on sale)</td></tr>
+          <tr class="total"><td>True Net Cost</td><td>What the paid sets actually cost</td><td>$150.16 → reduces further on GWP sale</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">// Layer Timing</div>
+      <ul class="feat-list">
+        <li><strong>Gift card discount</strong> — applied immediately at invoice import. Known at purchase time.</li>
+        <li><strong>Retailer rewards earned</strong> — calculated at invoice import, held in pool. Applied to cost basis when spent on a future order.</li>
+        <li><strong>Insider Points Redeem</strong> — detected on invoice automatically. Recorded as spend event from pool.</li>
+        <li><strong>Rakuten cashback</strong> — calculated at order entry, held in cashback pool. Applied when quarterly payment received.</li>
+        <li><strong>GWP proceeds</strong> — allocated when GWP set sells. User enters actual net after fees. Reduces cost basis of paid sets proportionally.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- TAX RECOVERY -->
+  <div class="section" id="sec-taxrecovery">
+    <div class="sec-header"><div class="sec-title">Tax Recovery System</div><div class="sec-line"></div></div>
+
+    <div class="card">
+      <div class="card-title">// The Value Proposition</div>
+      <ul class="feat-list">
+        <li>ResellOS subscription cost: <strong>$400-600/year</strong></li>
+        <li>Average WA state tax recovery for active resellers: <strong>$5,000+/year</strong></li>
+        <li>Current alternative: tax recovery companies charge <strong>25% of recovered funds</strong></li>
+        <li>ResellOS automates documentation, generates ready-to-file quarterly report, user files themselves or hands to CPA</li>
+        <li>This is the <strong>headline feature</strong> at community launch — not buried in the feature list</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">// Recovery Workflow</div>
+      <ul class="feat-list">
+        <li><strong>At purchase:</strong> Tax amount captured from invoice. Retailer profile checked — does cert apply? If tax was charged despite cert eligibility → flagged as potential recovery candidate.</li>
+        <li><strong>FIFO matching:</strong> When a set sells, system identifies which specific purchase unit sold (first purchased = first sold). That unit's tax paid is the recovery amount. Critical when same set purchased from multiple retailers at different tax rates.</li>
+        <li><strong>At sale:</strong> Unit moves to sold. Tax recovery eligibility confirmed. Record created in tax_recovery table with pending status.</li>
+        <li><strong>At quarter end:</strong> Agent reads all eligible sold units for the period. Generates state-formatted report. User files. Items marked claimed.</li>
+        <li><strong>At reimbursement:</strong> User records receipt. Items marked reimbursed. Amount recorded.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">// Why FIFO Matters for Tax Recovery</div>
+      <ul class="feat-list">
+        <li>Bought 50 units from LEGO.com — tax paid: $5.36/unit</li>
+        <li>Bought 20 units from Walmart in-store — tax exempt: $0</li>
+        <li>Bought 30 units from Barnes & Noble — tax paid: $3.21/unit</li>
+        <li>Sold 50 units — FIFO says these were the <strong>LEGO.com units</strong></li>
+        <li>Tax recovery claim: 50 × $5.36 = <strong>$268.00</strong> — clean, auditable, defensible</li>
+        <li>Without FIFO tracking: ambiguous which units sold, recovery amount uncertain, audit risk</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- ONBOARDING -->
+  <div class="section" id="sec-onboarding">
+    <div class="sec-header"><div class="sec-title">Onboarding Flow</div><div class="sec-line"></div></div>
+
+    <div class="card">
+      <div class="card-title">// Required at First Login — Configures All Agent Behavior</div>
+
+      <div class="onboard-item">
+        <div class="onboard-q">01 — State of Operation</div>
+        <div class="onboard-a">Determines tax recovery rules applied. Washington state first. State-specific rules configured in retailer profiles. Affects tax_recovery table logic and quarterly report format.</div>
+      </div>
+
+      <div class="onboard-item">
+        <div class="onboard-q">02 — Inventory Costing Method</div>
+        <div class="onboard-a">FIFO (default, recommended) or Specific Identification (premium). Confirm with CPA. Affects how sales are matched to purchases for tax recovery and P&L reporting.</div>
+      </div>
+
+      <div class="onboard-item">
+        <div class="onboard-q">03 — Tax Treatment Preference</div>
+        <div class="onboard-a">How are GWP proceeds, retailer rewards, and cashback treated for tax purposes? Conservative (income when received) / Cost Reduction (reduces cost basis) / Hybrid. Must align with CPA guidance. Applies consistently to all calculations.</div>
+      </div>
+
+      <div class="onboard-item">
+        <div class="onboard-q">04 — Reseller Certificate</div>
+        <div class="onboard-a">Certificate number, issuing state, expiry date. Which retailers accept it. Drives tax_exempt flag on line items and tax recovery eligibility. Expiry triggers renewal reminder.</div>
+      </div>
+
+      <div class="onboard-item">
+        <div class="onboard-q">05 — Retailer Default Rates</div>
+        <div class="onboard-a">Default rewards rate per retailer (overridable per order for promotional events). Default Rakuten rate (overridable per order). Gift card discount % default per retailer.</div>
+      </div>
+
+      <div class="onboard-item">
+        <div class="onboard-q">06 — ResellOS Gmail Connection</div>
+        <div class="onboard-a">Connect dedicated ResellOS Gmail account (not personal Gmail). Authorize Gmail MCP for invoice and shipping confirmation reading. Set up forwarding filters in personal Gmail.</div>
+      </div>
+
+      <div class="onboard-item">
+        <div class="onboard-q">07 — Google Sheets Connection</div>
+        <div class="onboard-a">Create or connect ResellOS Google Sheet in dedicated Gmail account. Agent 11 (Sheets Sync) configures tab structure automatically on first run.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- STACK -->
+  <div class="section" id="sec-stack">
+    <div class="sec-header"><div class="sec-title">Technology Stack</div><div class="sec-line"></div></div>
+
+    <div class="stack-item">
+      <div class="stack-num">1</div>
+      <div style="flex:1">
+        <div class="stack-name">VS Code + Claude Code Extension</div>
+        <div class="stack-desc">Primary development environment. Single window for files, terminal, and AI coding assistant. Eliminates context-switching friction. Claude Code runs autonomous agent loops — writes code, executes, observes output, debugs without manual intervention between steps.</div>
+      </div>
+      <div class="stack-status status-next">Install Next</div>
+    </div>
+
+    <div class="stack-item">
+      <div class="stack-num">2</div>
+      <div style="flex:1">
+        <div class="stack-name">Python 3.14 + Virtual Environment</div>
+        <div class="stack-desc">Runtime for all agents. Virtual environment isolates ResellOS dependencies from system Python. Libraries: pdfplumber (PDF parsing), sqlite3 (database), gspread (Sheets), google-auth (Gmail MCP).</div>
+      </div>
+      <div class="stack-status status-done">Installed ✓</div>
+    </div>
+
+    <div class="stack-item">
+      <div class="stack-num">3</div>
+      <div style="flex:1">
+        <div class="stack-name">SQLite → PostgreSQL</div>
+        <div class="stack-desc">SQLite for local development and personal use — single file, no server, backs up with GitHub. PostgreSQL for community launch — handles multi-user, concurrent access, production scale. Migration is straightforward when the time comes.</div>
+      </div>
+      <div class="stack-status status-next">Build Next</div>
+    </div>
+
+    <div class="stack-item">
+      <div class="stack-num">4</div>
+      <div style="flex:1">
+        <div class="stack-name">Git + GitHub</div>
+        <div class="stack-desc">Version control for all code and architecture documents. Every working agent committed before starting the next. GitHub MCP allows Claude Code to commit automatically. Never lose working code between sessions.</div>
+      </div>
+      <div class="stack-status status-next">Setup Next</div>
+    </div>
+
+    <div class="stack-item">
+      <div class="stack-num">5</div>
+      <div style="flex:1">
+        <div class="stack-name">MCP Connectors — Priority Order</div>
+        <div class="stack-desc">filesystem MCP (read/write local files) → GitHub MCP (auto-commit) → Google Sheets MCP (sync output) → Gmail MCP (invoice ingestion). Each MCP removes one manual step from the agent loop.</div>
+      </div>
+      <div class="stack-status status-next">Configure Next</div>
+    </div>
+
+    <div class="stack-item">
+      <div class="stack-num">6</div>
+      <div style="flex:1">
+        <div class="stack-name">ResellOS Gmail (Dedicated)</div>
+        <div class="stack-desc">Separate Google account for all ResellOS data. Personal Gmail forwards LEGO invoices and shipping confirmations via filter. MCP connects to business account only. Privacy preserved. Correct pattern for community members to replicate.</div>
+      </div>
+      <div class="stack-status status-next">Create Next</div>
+    </div>
+
+    <div class="stack-item">
+      <div class="stack-num">7</div>
+      <div style="flex:1">
+        <div class="stack-name">Google Sheets (View Layer)</div>
+        <div class="stack-desc">Human-readable window into SQLite data. Read-only — all data entry through OS. Synced on demand by Agent 11. Bookkeeper and CPA facing. Not the data truth — the data window.</div>
+      </div>
+      <div class="stack-status status-later">After SQLite</div>
+    </div>
+
+  </div>
+
+  <!-- DATA FLOW -->
+  <div class="section" id="sec-dataflow">
+    <div class="sec-header"><div class="sec-title">Data Flow</div><div class="sec-line"></div></div>
+
+    <div class="card">
+      <div class="card-title">// Purchase to True Cost Basis</div>
+      <div class="flow"><span class="c-blue">USER</span> places order at LEGO.com
+  │
+  ▼
+<span class="c-blue">AGENT 02</span> — Manual entry: order number + gift card last 4 + rewards rate
+  │  Creates order record with status: pending_invoice
+  │
+  ▼
+<span class="c-amber">LEGO ships order</span> → Invoice PDF arrives at no-reply-billing03@lego.com
+  │
+  ▼
+<span class="c-blue">AGENT 01A</span> — Invoice PDF parsed
+  │  Extracts: set numbers, prices, GWP flags, insider points redeemed
+  │  Matches to pending order by order number
+  │  Populates: line_items table
+  │  Status → active
+  │
+  ▼
+<span class="c-blue">AGENT 03</span> — Shipping confirmation parsed
+  │  Extracts: tracking number, carrier, estimated arrival
+  │  Updates order record
+  │
+  ▼
+<span class="c-green">AGENT 05</span> — Tax allocation runs
+  │  Allocates order tax proportionally to paid line items
+  │  Flags recovery-eligible items
+  │
+  ▼
+<span class="c-green">AGENT 04</span> — Cost basis engine runs (partial)
+  │  Applies gift card discount immediately
+  │  Records rewards earned → rewards pool
+  │  Records cashback earned → cashback pool
+  │  True cost basis: PARTIAL (GWP/rewards/cashback deferred)
+  │
+  ▼
+<span class="c-blue">USER</span> receives order → marks received
+  │  Units created in inventory table (one per physical unit)
+  │  FIFO purchase date recorded
+  │
+  ▼
+<span class="c-amber">GWP sets sell</span> → User enters net proceeds
+  │
+  ▼
+<span class="c-green">AGENT 08</span> — GWP allocation runs
+  │  Net proceeds allocated to paid sets on originating order
+  │  Cost basis updated on affected inventory units
+  │
+  ▼
+<span class="c-amber">Rewards spent on future order</span>
+  │
+  ▼
+<span class="c-green">AGENT 06</span> — Rewards pool manager
+  │  Draws from pool, allocates to receiving order sets
+  │  Cost basis updated
+  │
+  ▼
+<span class="c-amber">Rakuten quarterly payout received</span>
+  │
+  ▼
+<span class="c-green">AGENT 07</span> — Cashback pool manager
+  │  Allocates received cashback to originating orders
+  │  Final cost basis calculated — all four layers complete
+  │
+  ▼
+<span class="c-blue">TRUE COST BASIS FINAL</span> — stored in inventory.true_cost_basis</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">// Sale to Tax Recovery</div>
+      <div class="flow"><span class="c-blue">USER</span> exports sales CSV from Walmart/Amazon/Bricklink/eBay
+  │
+  ▼
+<span class="c-blue">AGENT 09</span> — Sales importer reads CSV
+  │  Matches sale to inventory unit by set number + FIFO date
+  │  Calculates: net_proceeds - true_cost_basis = actual_profit
+  │  Writes to sales table
+  │  Updates inventory unit status → sold
+  │
+  ▼
+<span class="c-green">TAX RECOVERY TRIGGER</span>
+  │  Was tax paid on this unit? → tax_paid > 0
+  │  Is retailer cert eligible? → reseller_cert_applied check
+  │  If both true → creates tax_recovery record with status: eligible
+  │
+  ▼
+<span class="c-amber">END OF QUARTER</span>
+  │
+  ▼
+<span class="c-blue">AGENT 10</span> — Tax recovery report generated
+  │  Reads all eligible records for the quarter
+  │  Groups by purchase date, retailer, set, tax paid, sale date
+  │  Formats for WA state quarterly filing
+  │  Exports PDF/CSV report
+  │  Status → filed
+  │
+  ▼
+<span class="c-amber">STATE REIMBURSEMENT RECEIVED</span>
+  │
+  ▼
+<span class="c-blue">USER</span> records receipt in ResellOS
+  │  Status → reimbursed
+  │  Amount recorded
+  │  Flows into cost basis adjustment per CPA-selected treatment</div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="footer-name">ResellOS — Architecture v1.0</div>
+    <div class="footer-meta">Built from 15 months live experience · LEGO vertical first · Designed to generalize</div>
+  </div>
+
+</div>
+
+<script>
+  function show(id) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('sec-' + id).classList.add('active');
+    event.target.classList.add('active');
+  }
+
+  function toggleDB(header) {
+    header.parentElement.classList.toggle('open');
+  }
+
+  function toggleAgent(agent) {
+    agent.classList.toggle('open');
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reselling OS — Product Document</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;1,8..60,300&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #2A6496;
+    --primary-light: #3A84C4;
+    --primary-pale: #E8F4F8;
+    --dark: #1A2A3A;
+    --slate: #2E3F50;
+    --light: #F4F8FB;
+    --white: #FDFEFF;
+    --border: rgba(42,100,150,0.15);
+    --amber: #C8832A;
+    --green: #2A7A4A;
+    --green-light: #3AAA6A;
+    --red: #8A2A2A;
+    --text: #1A2A3A;
+    --text-light: #4A6070;
+    --code-bg: #1A2A3A;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--light);
+    color: var(--text);
+    font-family: 'Source Serif 4', Georgia, serif;
+    min-height: 100vh;
+  }
+
+  .page-wrap {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 60px 32px 100px;
+  }
+
+  /* Header */
+  .header {
+    background: var(--dark);
+    color: white;
+    padding: 48px;
+    margin-bottom: 48px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .header::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 300px; height: 100%;
+    background: linear-gradient(135deg, transparent, rgba(42,100,150,0.3));
+  }
+
+  .header-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--primary-light);
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+
+  .header-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 900;
+    color: white;
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+
+  .header-title span { color: var(--primary-light); }
+
+  .header-sub {
+    font-size: 0.95rem;
+    color: rgba(255,255,255,0.6);
+    font-weight: 300;
+    max-width: 500px;
+    line-height: 1.6;
+  }
+
+  .header-meta {
+    display: flex;
+    gap: 24px;
+    margin-top: 28px;
+    flex-wrap: wrap;
+  }
+
+  .meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .meta-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--primary-light);
+  }
+
+  .meta-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.4);
+  }
+
+  /* Nav */
+  .nav {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 40px;
+    flex-wrap: wrap;
+    background: white;
+    padding: 8px;
+    border: 1px solid var(--border);
+  }
+
+  .nav-btn {
+    background: transparent;
+    border: none;
+    padding: 10px 18px;
+    font-family: 'Source Serif 4', serif;
+    font-size: 0.82rem;
+    cursor: pointer;
+    color: var(--text-light);
+    letter-spacing: 0.04em;
+    transition: all 0.2s;
+  }
+
+  .nav-btn:hover { color: var(--primary); }
+  .nav-btn.active {
+    background: var(--primary);
+    color: white;
+  }
+
+  /* Sections */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* Cards */
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    padding: 28px 32px;
+    margin-bottom: 24px;
+  }
+
+  .card-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--dark);
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .card-title .icon {
+    font-size: 1.2rem;
+  }
+
+  /* Vision statement */
+  .vision-block {
+    background: var(--dark);
+    color: white;
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    border-left: 4px solid var(--primary-light);
+  }
+
+  .vision-text {
+    font-size: 1.1rem;
+    line-height: 1.8;
+    color: rgba(255,255,255,0.85);
+    font-weight: 300;
+    font-style: italic;
+  }
+
+  .vision-text strong {
+    color: var(--primary-light);
+    font-style: normal;
+    font-weight: 600;
+  }
+
+  /* Stats grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: white;
+    border: 1px solid var(--border);
+    padding: 20px 24px;
+    border-top: 3px solid var(--primary);
+  }
+
+  .stat-number {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--primary);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-light);
+  }
+
+  /* Feature layers */
+  .layer {
+    background: white;
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+
+  .layer-header {
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+    background: rgba(42,100,150,0.04);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .layer-header:hover { background: rgba(42,100,150,0.08); }
+
+  .layer-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--primary);
+    min-width: 32px;
+  }
+
+  .layer-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--dark);
+    flex: 1;
+  }
+
+  .layer-tag {
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border: 1px solid;
+    font-weight: 600;
+  }
+
+  .tag-core { border-color: rgba(42,100,150,0.4); color: var(--primary); }
+  .tag-moat { border-color: rgba(42,122,74,0.4); color: var(--green); }
+  .tag-future { border-color: rgba(200,131,42,0.4); color: var(--amber); }
+
+  .layer-chevron {
+    color: var(--primary);
+    transition: transform 0.25s;
+  }
+
+  .layer.open .layer-chevron { transform: rotate(180deg); }
+
+  .layer-body {
+    display: none;
+    padding: 20px 24px 24px;
+  }
+
+  .layer.open .layer-body { display: block; }
+
+  .feature-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .feature-list li {
+    display: flex;
+    gap: 12px;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--text-light);
+  }
+
+  .feature-list li::before {
+    content: '→';
+    color: var(--primary);
+    flex-shrink: 0;
+    font-weight: 600;
+  }
+
+  .feature-list li strong { color: var(--dark); }
+
+  /* Cost basis example */
+  .cost-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    margin-top: 16px;
+  }
+
+  .cost-table th {
+    background: var(--dark);
+    color: white;
+    padding: 10px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .cost-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-light);
+  }
+
+  .cost-table tr:last-child td {
+    border-bottom: none;
+    font-weight: 600;
+    color: var(--dark);
+    background: rgba(42,100,150,0.05);
+  }
+
+  .cost-table .negative { color: var(--green); }
+  .cost-table .total { color: var(--primary); font-size: 1rem; }
+
+  /* Timeline */
+  .timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 28px;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+
+  .timeline-item {
+    display: flex;
+    gap: 24px;
+    padding-bottom: 32px;
+    position: relative;
+  }
+
+  .timeline-dot {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .timeline-dot.future { background: var(--amber); }
+  .timeline-dot.horizon { background: var(--green); }
+
+  .timeline-content {
+    flex: 1;
+    background: white;
+    border: 1px solid var(--border);
+    padding: 20px 24px;
+    margin-top: 8px;
+  }
+
+  .timeline-phase {
+    font-size: 0.68rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--primary);
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .timeline-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--dark);
+    margin-bottom: 10px;
+  }
+
+  .timeline-items {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .timeline-items li {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    line-height: 1.5;
+    padding-left: 14px;
+    position: relative;
+  }
+
+  .timeline-items li::before {
+    content: '·';
+    position: absolute;
+    left: 0;
+    color: var(--primary);
+    font-weight: 700;
+  }
+
+  /* Retailer profiles */
+  .retailer-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .retailer-card {
+    background: var(--light);
+    border: 1px solid var(--border);
+    padding: 16px 18px;
+  }
+
+  .retailer-name {
+    font-weight: 600;
+    color: var(--dark);
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+  }
+
+  .retailer-detail {
+    font-size: 0.78rem;
+    color: var(--text-light);
+    line-height: 1.6;
+  }
+
+  /* Build stack */
+  .build-item {
+    background: white;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--primary);
+    padding: 16px 20px;
+    margin-bottom: 10px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .build-priority {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--primary);
+    min-width: 28px;
+  }
+
+  .build-main { flex: 1; }
+
+  .build-name {
+    font-weight: 600;
+    color: var(--dark);
+    font-size: 0.92rem;
+    margin-bottom: 4px;
+  }
+
+  .build-desc {
+    font-size: 0.82rem;
+    color: var(--text-light);
+    line-height: 1.5;
+  }
+
+  .build-tool {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    background: rgba(42,100,150,0.08);
+    color: var(--primary);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  /* North star */
+  .north-star {
+    background: var(--dark);
+    color: white;
+    padding: 40px;
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .north-star-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--primary-light);
+    margin-bottom: 16px;
+  }
+
+  .north-star-text {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(1.1rem, 3vw, 1.6rem);
+    font-weight: 700;
+    color: white;
+    line-height: 1.5;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .north-star-text span { color: var(--primary-light); }
+
+  @media (max-width: 600px) {
+    .page-wrap { padding: 0 0 80px; }
+    .header { padding: 32px 20px; }
+    .card { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-label">Product Document — Version 1.0</div>
+    <div class="header-title">The Reselling <span>OS</span></div>
+    <div class="header-sub">A multi-layer cost basis engine and business operating system for serious resellers. Built from 15 months of live experience.</div>
+    <div class="header-meta">
+      <div class="meta-item">
+        <div class="meta-value">$160K</div>
+        <div class="meta-label">Revenue Proven</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-value">$72K</div>
+        <div class="meta-label">Net Profit</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-value">15mo</div>
+        <div class="meta-label">Live R&D</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-value">3</div>
+        <div class="meta-label">Build Phases</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <div class="nav">
+    <button class="nav-btn active" onclick="showSection('vision')">Vision</button>
+    <button class="nav-btn" onclick="showSection('costbasis')">Cost Basis Engine</button>
+    <button class="nav-btn" onclick="showSection('features')">Full Feature Map</button>
+    <button class="nav-btn" onclick="showSection('retailers')">Retailer Profiles</button>
+    <button class="nav-btn" onclick="showSection('storage')">Storage & Shipping</button>
+    <button class="nav-btn" onclick="showSection('sales')">Sales Import</button>
+    <button class="nav-btn" onclick="showSection('timeline')">Build Timeline</button>
+    <button class="nav-btn" onclick="showSection('buildstack')">Build Stack</button>
+  </div>
+
+  <!-- VISION -->
+  <div class="section active" id="section-vision">
+
+    <div class="north-star">
+      <div class="north-star-label">The Problem Worth Solving</div>
+      <div class="north-star-text">Resellers who have proven the model are <span>trading time for money</span> in a way that isn't sustainable. They built themselves a better job. The dream was freedom. The OS gives them their <span>time back</span> without giving up the income.</div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number">$1.5M+</div>
+        <div class="stat-label">Revenue potential with right capital & systems</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">$500K+</div>
+        <div class="stat-label">Net income potential at scale</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">6mo</div>
+        <div class="stat-label">To first paying community members</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">12mo</div>
+        <div class="stat-label">To full product launch</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon">🎯</span>Target Customer</div>
+      <div class="vision-block" style="margin-bottom:0;">
+        <div class="vision-text">A reseller who has <strong>proven the model works.</strong> Making real money. But trading too much time for it. The dream was freedom from a boss, a schedule, someone else's ceiling. Right now they've built themselves a different job. What they want isn't more products to sell — it's the <strong>system that gives them their time back</strong> while the business keeps growing. They are exactly where you were 15 months ago.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon">🏰</span>The Moat</div>
+      <ul class="feature-list">
+        <li><strong>Built from the inside:</strong> 15 months of live reselling experience, $160K revenue, $72K profit. Not theoretical — proven.</li>
+        <li><strong>The cost basis engine:</strong> No existing tool correctly handles multi-layer discounts — gift cards, retailer rewards, Rakuten cashback, and GWP proceeds simultaneously. This is the gap.</li>
+        <li><strong>Sourcing intelligence:</strong> Knowing which wholesalers, liquidators, and retail channels have inventory at prices that make the math work before a set even retires. This took 15 months to build and cannot be Googled.</li>
+        <li><strong>Community compounds value:</strong> Members bring products, patterns, and sourcing relationships that make the tool smarter over time.</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- COST BASIS ENGINE -->
+  <div class="section" id="section-costbasis">
+
+    <div class="card">
+      <div class="card-title"><span class="icon">🧮</span>The Four-Layer Cost Basis Model</div>
+      <p style="font-size:0.9rem; color:var(--text-light); line-height:1.7; margin-bottom:20px;">Every set in inventory has a true cost basis that reflects all four layers. Not what the invoice says. What it actually cost to have that set available to sell. This number changes every sell decision.</p>
+
+      <table class="cost-table">
+        <thead>
+          <tr>
+            <th>Layer</th>
+            <th>What It Is</th>
+            <th>How It Works</th>
+            <th>Example — LEGO Order</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. Invoice Total</strong></td>
+            <td>Base purchase cost including tax</td>
+            <td>Auto-populated from invoice parsing</td>
+            <td>$171.03</td>
+          </tr>
+          <tr>
+            <td><strong>2. Gift Card Discount</strong></td>
+            <td>Savings from buying gift cards below face value</td>
+            <td>% discount entered per order — typically 10% but variable</td>
+            <td class="negative">-$17.10 (10%)</td>
+          </tr>
+          <tr>
+            <td><strong>3. Retailer Rewards</strong></td>
+            <td>Points/cash earned in retailer loyalty program</td>
+            <td>Rate set per order (default 5%, adjustable for events). Flows to rewards pool. Allocated when spent.</td>
+            <td class="negative">-$7.75 (5%)</td>
+          </tr>
+          <tr>
+            <td><strong>4. External Cashback</strong></td>
+            <td>Rakuten or similar cashback on pre-tax spend</td>
+            <td>Rate set per order. Flows to cashback pool with payout tracking. Allocated when received.</td>
+            <td class="negative">-$3.87 (2.5%)</td>
+          </tr>
+          <tr>
+            <td><strong>5. GWP Net Proceeds</strong></td>
+            <td>Actual net from selling free gift-with-purchase sets</td>
+            <td>Entered when GWP sets sell. Allocated proportionally across paid sets on that order.</td>
+            <td class="negative">-$85.38</td>
+          </tr>
+          <tr>
+            <td><strong class="total">True Net Cost</strong></td>
+            <td colspan="2"><strong>What the paid sets actually cost after all layers</strong></td>
+            <td><strong class="total">$56.93</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon">🏦</span>The Rewards Pool System</div>
+      <ul class="feature-list">
+        <li><strong>Earn side:</strong> Every order calculates rewards at the order-specific rate and adds to the retailer's pool. Rate defaults to 5% but is adjustable per order for promotional events (10%, 20%, custom).</li>
+        <li><strong>Spend side:</strong> When rewards are used on a future order, they're drawn from the pool and allocated proportionally across that order's sets as a cost reduction.</li>
+        <li><strong>Thread preserved:</strong> The connection between the earning order and the spending order is maintained. Full history visible at any time.</li>
+        <li><strong>Pool balance:</strong> Running balance of earned but unspent rewards across all retailers — treated as a real asset in the business.</li>
+        <li><strong>Separate pools per retailer:</strong> LEGO Insider, Kohl's Cash, B&N Rewards, Macy's Star Rewards — each has its own pool since rewards are earned and spent within each ecosystem.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon">💰</span>The Cashback Pool System</div>
+      <ul class="feature-list">
+        <li><strong>Earn side:</strong> Rakuten cashback rate set per order (2.5% base, up to 15% during promotions). Calculated on pre-tax amount. Added to cashback pool.</li>
+        <li><strong>Payout tracking:</strong> Rakuten pays quarterly. Pool tracks earned vs. received with expected payout quarter.</li>
+        <li><strong>Allocation on receipt:</strong> When cashback hits your account, it's allocated back to the orders that earned it and adjusts cost basis on those sets.</li>
+        <li><strong>Stacks with retailer rewards:</strong> Rakuten applies on top of native retailer rewards — both are captured independently.</li>
+        <li><strong>Expandable:</strong> Architecture supports adding other cashback platforms beyond Rakuten.</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- FEATURES -->
+  <div class="section" id="section-features">
+
+    <div class="layer open">
+      <div class="layer-header" onclick="toggleLayer(this)">
+        <div class="layer-num">01</div>
+        <div class="layer-name">Email-Driven Order Import</div>
+        <div class="layer-tag tag-core">Phase 1 — Foundation</div>
+        <div class="layer-chevron">▾</div>
+      </div>
+      <div class="layer-body">
+        <ul class="feature-list">
+          <li><strong>Gmail parser:</strong> Reads order confirmation emails from all retailers — extracts set numbers, quantities, unit prices, GWP items, shipping method, estimated arrival date automatically.</li>
+          <li><strong>Full order record created:</strong> Every field populated from the email. No manual data entry for the order itself.</li>
+          <li><strong>GWP auto-identification:</strong> Free items flagged automatically from invoice — zero price or "Free" notation triggers GWP tagging.</li>
+          <li><strong>Auto-file to Drive:</strong> Invoice PDF filed to correct retailer folder simultaneously. Existing folder structure preserved.</li>
+          <li><strong>QuickBooks push:</strong> Invoice data pushed via Dext, AutoEntry, or direct integration. Bookkeeper reviews, not enters.</li>
+          <li><strong>One manual input remaining:</strong> Gift card number(s) used for the order — not included in confirmation emails, entered once on order review screen.</li>
+          <li><strong>Live tracking populated:</strong> Shipping service and estimated arrival from the confirmation email feed directly into the order pipeline tracker.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-header" onclick="toggleLayer(this)">
+        <div class="layer-num">02</div>
+        <div class="layer-name">Purchase & Inventory Tracking</div>
+        <div class="layer-tag tag-core">Phase 1 — Build Second</div>
+        <div class="layer-chevron">▾</div>
+      </div>
+      <div class="layer-body">
+        <ul class="feature-list">
+          <li><strong>Order pipeline:</strong> Live status on every order — placed, in transit, delivered, received into inventory.</li>
+          <li><strong>Expected delivery tracking:</strong> Purchase date plus estimated delivery window. Alerts when orders are overdue.</li>
+          <li><strong>Inventory received confirmation:</strong> Mark items as received, triggering final cost basis calculation.</li>
+          <li><strong>Per-unit cost basis:</strong> True net cost allocated to each unit using all four discount layers.</li>
+          <li><strong>Sell decision dashboard:</strong> At any time, see each set's true cost, current market price, and real ROI — not invoice ROI.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-header" onclick="toggleLayer(this)">
+        <div class="layer-num">03</div>
+        <div class="layer-name">Multi-Layer Cost Basis Engine</div>
+        <div class="layer-tag tag-moat">The Moat</div>
+        <div class="layer-chevron">▾</div>
+      </div>
+      <div class="layer-body">
+        <ul class="feature-list">
+          <li><strong>Retailer-tabbed gift card ledger:</strong> Separate tab per retailer — LEGO, Kohl's, B&N, Macy's. Each card shows face value, price paid, discount %, last 4 digits, date purchased, and status (available / partially used / depleted). Single entry and bulk entry modes. No more scrolling through one flat list.</li>
+          <li><strong>Gift card to order linkage:</strong> One manual step on order review — select which gift card(s) were used. System calculates effective discount automatically.</li>
+          <li><strong>Retailer rewards pools:</strong> Separate pool per retailer. Earn at order-specific rates (default 5%, adjustable for 10%/20% promotional events). Spend tracked and allocated back to receiving orders.</li>
+          <li><strong>GWP calculator:</strong> Free sets auto-identified from email import. Net proceeds entered when GWP sets sell. Allocated proportionally across paid sets on that order.</li>
+          <li><strong>Cashback pool:</strong> Rakuten and other platforms tracked with payout quarters and allocation on receipt. Stacks with retailer rewards independently.</li>
+          <li><strong>True ROI per unit:</strong> Every set shows actual cost basis and actual return — not invoice approximations. Changes every sell decision.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-header" onclick="toggleLayer(this)">
+        <div class="layer-num">04</div>
+        <div class="layer-name">Tax & Reporting</div>
+        <div class="layer-tag tag-core">Phase 1 — Build Third</div>
+        <div class="layer-chevron">▾</div>
+      </div>
+      <div class="layer-body">
+        <ul class="feature-list">
+          <li><strong>Tax period reports:</strong> Purchases, COGS, fees, and net profit exportable by quarter or year in formats your CPA can use.</li>
+          <li><strong>COGS calculation:</strong> Uses true cost basis not invoice total — accurate representation of actual cost of goods sold.</li>
+          <li><strong>Fee tracking:</strong> eBay, Amazon, shipping fees tracked per sale and summarized for tax reporting.</li>
+          <li><strong>Inventory valuation:</strong> Current inventory valued at true cost basis for balance sheet purposes.</li>
+          <li><strong>QuickBooks sync:</strong> Reports align with what's in QuickBooks — no reconciliation surprises for your bookkeeper.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-header" onclick="toggleLayer(this)">
+        <div class="layer-num">05</div>
+        <div class="layer-name">Keepa Intelligence Layer</div>
+        <div class="layer-tag tag-core">Phase 1 — Build Fourth</div>
+        <div class="layer-chevron">▾</div>
+      </div>
+      <div class="layer-body">
+        <ul class="feature-list">
+          <li><strong>Watchlist scanning:</strong> Targeted list of sets scanned automatically on schedule. No manual Keepa pulls.</li>
+          <li><strong>Demand signal:</strong> Units sold per month with Q4 seasonal multiplier applied automatically.</li>
+          <li><strong>Supply signal:</strong> Active seller count plus Amazon presence flag — yellow/red light depending on category.</li>
+          <li><strong>Context layer:</strong> Retirement date tracking, Bricklink minifig pricing, price per part — auto-populated where API available.</li>
+          <li><strong>Buy signal output:</strong> Ranked list of opportunities with confidence score. Buy/watch/pass recommendation.</li>
+          <li><strong>Grader integration:</strong> Data flows into cost basis grader — if sourced at X, at current rewards/cashback rates, true ROI is Y.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-header" onclick="toggleLayer(this)">
+        <div class="layer-num">06</div>
+        <div class="layer-name">Physical Storage + WFS Shipping</div>
+        <div class="layer-tag tag-core">Phase 1</div>
+        <div class="layer-chevron">▾</div>
+      </div>
+      <div class="layer-body">
+        <ul class="feature-list">
+          <li><strong>Open box tracking:</strong> Active boxes show which sets are inside, how many units, remaining capacity. Know at a glance what's open and what's coming in to fill it.</li>
+          <li><strong>Box sealing:</strong> When a box hits capacity, seal it — assigns a box number, records set count, calculates estimated weight based on set weights.</li>
+          <li><strong>Box label:</strong> Number, contents summary, unit count, weight — printable at home before you leave for the storage unit.</li>
+          <li><strong>WFS shipping prep:</strong> When ready to ship to Walmart Fulfillment Services, select boxes, generate shipping labels at home, take to storage unit, apply and drop at FedEx. No guesswork on weight.</li>
+          <li><strong>Inventory location:</strong> Every set in inventory knows which box it's in and whether that box is open, sealed, or shipped to fulfillment.</li>
+          <li><strong>Fulfillment status:</strong> Once shipped to WFS, sets move from storage inventory to fulfillment inventory. Sales import reconciles from there.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-header" onclick="toggleLayer(this)">
+        <div class="layer-num">07</div>
+        <div class="layer-name">Multi-Platform Sales Import</div>
+        <div class="layer-tag tag-core">Phase 1</div>
+        <div class="layer-chevron">▾</div>
+      </div>
+      <div class="layer-body">
+        <ul class="feature-list">
+          <li><strong>Platform coverage:</strong> Walmart, Amazon, Bricklink, eBay — sales data imported automatically from each platform's export or API.</li>
+          <li><strong>Inventory matching:</strong> Each sale matched to the specific inventory unit purchased. Set number, order, cost basis — all connected.</li>
+          <li><strong>True profit per sale:</strong> Sale price minus true cost basis (all four layers) minus platform fees minus shipping = actual profit. Not estimated. Actual.</li>
+          <li><strong>Fee extraction:</strong> Platform fees, shipping costs, and any other selling expenses extracted from import data and recorded per transaction.</li>
+          <li><strong>P&L by platform:</strong> See which selling platform is generating the most actual profit — not just revenue. Informs where to prioritize inventory.</li>
+          <li><strong>P&L by set:</strong> Every set number has a lifetime profit record across all platforms and all orders it appeared in.</li>
+          <li><strong>Closes the loop:</strong> Combines with cost basis engine and storage tracking to give a complete picture — bought here, stored here, sold here, made this.</li>
+        </ul>
+      </div>
+    </div>
+      <div class="layer-body">
+        <ul class="feature-list">
+          <li><strong>Ungating roadmap:</strong> Track which categories you're approved for and roadmap to new ones.</li>
+          <li><strong>Wholesaler identification:</strong> Source products at prices that allow profit even at current retail.</li>
+          <li><strong>Prep center coordination:</strong> No manual packaging — products shipped direct to prep center, then to Amazon fulfillment.</li>
+          <li><strong>FBA fee calculator:</strong> True landed cost including prep center fees, shipping to Amazon, FBA fees.</li>
+          <li><strong>Shipment tracking:</strong> From purchase through prep center to Amazon fulfillment center.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-header" onclick="toggleLayer(this)">
+        <div class="layer-num">07</div>
+        <div class="layer-name">Community & Monetization</div>
+        <div class="layer-tag tag-future">Phase 2 — Month 6–12</div>
+        <div class="layer-chevron">▾</div>
+      </div>
+      <div class="layer-body">
+        <ul class="feature-list">
+          <li><strong>Skool or Discord community:</strong> Paying members get access to the software and systems.</li>
+          <li><strong>Social media funnel:</strong> Your story, your numbers, your framework as top of funnel content.</li>
+          <li><strong>Sourcing intelligence sharing:</strong> Community members contribute wholesale sources, deals, and patterns that compound value for everyone.</li>
+          <li><strong>Tiered access:</strong> Basic tool access vs. full system including Keepa intelligence and sourcing network.</li>
+          <li><strong>Content curriculum:</strong> The 15-month journey packaged as a learning path for new members.</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RETAILER PROFILES -->
+  <div class="section" id="section-retailers">
+
+    <div class="card">
+      <div class="card-title"><span class="icon">🏪</span>Retailer Profile System</div>
+      <p style="font-size:0.9rem; color:var(--text-light); line-height:1.7; margin-bottom:20px;">Each retailer has a profile that defines its native reward architecture. Every order can override the default rate for promotional events. Rewards are tracked in separate pools since they're earned and spent within each ecosystem.</p>
+
+      <div class="retailer-grid">
+        <div class="retailer-card">
+          <div class="retailer-name">🧱 LEGO Shop</div>
+          <div class="retailer-detail">
+            <strong>Program:</strong> Insider Rewards<br>
+            <strong>Default rate:</strong> 5% pre-tax<br>
+            <strong>Variable:</strong> 10%, 20% events<br>
+            <strong>GWP:</strong> Yes — common<br>
+            <strong>Gift cards:</strong> Yes — buyable at discount<br>
+            <strong>Pool type:</strong> Retailer-specific
+          </div>
+        </div>
+        <div class="retailer-card">
+          <div class="retailer-name">🛍️ Kohl's</div>
+          <div class="retailer-detail">
+            <strong>Program:</strong> Kohl's Cash<br>
+            <strong>Default rate:</strong> Variable by event<br>
+            <strong>Variable:</strong> Yes — earn periods<br>
+            <strong>GWP:</strong> Occasional<br>
+            <strong>Gift cards:</strong> Yes<br>
+            <strong>Pool type:</strong> Retailer-specific
+          </div>
+        </div>
+        <div class="retailer-card">
+          <div class="retailer-name">📚 Barnes & Noble</div>
+          <div class="retailer-detail">
+            <strong>Program:</strong> B&N Rewards<br>
+            <strong>Default rate:</strong> Variable<br>
+            <strong>Variable:</strong> Yes<br>
+            <strong>GWP:</strong> Occasional<br>
+            <strong>Gift cards:</strong> Yes<br>
+            <strong>Pool type:</strong> Retailer-specific
+          </div>
+        </div>
+        <div class="retailer-card">
+          <div class="retailer-name">🏬 Macy's</div>
+          <div class="retailer-detail">
+            <strong>Program:</strong> Star Rewards<br>
+            <strong>Default rate:</strong> Variable by tier<br>
+            <strong>Variable:</strong> Yes<br>
+            <strong>GWP:</strong> Occasional<br>
+            <strong>Gift cards:</strong> Yes<br>
+            <strong>Pool type:</strong> Retailer-specific
+          </div>
+        </div>
+        <div class="retailer-card">
+          <div class="retailer-name">💸 Rakuten</div>
+          <div class="retailer-detail">
+            <strong>Type:</strong> External cashback<br>
+            <strong>Default rate:</strong> 2.5% (varies)<br>
+            <strong>Variable:</strong> Up to 15%+<br>
+            <strong>Payout:</strong> Quarterly<br>
+            <strong>Stacks with:</strong> All retailer rewards<br>
+            <strong>Pool type:</strong> Cashback pool
+          </div>
+        </div>
+        <div class="retailer-card" style="border: 1px dashed rgba(42,100,150,0.3); background: transparent;">
+          <div class="retailer-name" style="color:var(--text-light);">+ Add Retailer</div>
+          <div class="retailer-detail">Architecture supports unlimited retailer profiles. Each new retailer gets its own reward pool and configuration.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- STORAGE & SHIPPING -->
+  <div class="section" id="section-storage">
+
+    <div class="card">
+      <div class="card-title"><span class="icon">📦</span>Physical Storage + WFS Shipping Workflow</div>
+      <p style="font-size:0.9rem; color:var(--text-light); line-height:1.7; margin-bottom:24px;">Most reselling tools ignore the physical reality of the business. At volume, knowing what's in which box, how heavy it is, and being able to print labels before you leave for the storage unit is a genuine operational unlock. This is built for someone doing real fulfillment at real scale.</p>
+
+      <div class="build-item" style="margin-bottom:12px;">
+        <div class="build-priority" style="font-size:1.5rem;">📂</div>
+        <div class="build-main">
+          <div class="build-name">Open Box Tracking</div>
+          <div class="build-desc">Active boxes show current contents — which sets, how many units, remaining capacity based on box size. Sets auto-populate into the open box as they're received from orders. Know at a glance what you have open and what's incoming to fill it.</div>
+        </div>
+        <div class="build-tool">Phase 1</div>
+      </div>
+
+      <div class="build-item" style="margin-bottom:12px;">
+        <div class="build-priority" style="font-size:1.5rem;">📦</div>
+        <div class="build-main">
+          <div class="build-name">Box Sealing + Numbering</div>
+          <div class="build-desc">When a box hits capacity — seal it. System assigns a box number, records final set count, calculates estimated weight from known set weights. Box moves from open to sealed status. Label generated for printing.</div>
+        </div>
+        <div class="build-tool">Phase 1</div>
+      </div>
+
+      <div class="build-item" style="margin-bottom:12px;">
+        <div class="build-priority" style="font-size:1.5rem;">🖨️</div>
+        <div class="build-main">
+          <div class="build-name">Home Label Printing</div>
+          <div class="build-desc">Print shipping labels at home before going to the storage unit. WFS-formatted labels with box number, weight, contents summary. Arrive at storage unit ready to apply and go — no label printing on site.</div>
+        </div>
+        <div class="build-tool">Phase 1</div>
+      </div>
+
+      <div class="build-item" style="margin-bottom:12px;">
+        <div class="build-priority" style="font-size:1.5rem;">🚚</div>
+        <div class="build-main">
+          <div class="build-name">WFS Shipment Creation</div>
+          <div class="build-desc">Select which sealed boxes are going to Walmart Fulfillment Services. System generates the shipment, calculates total weight per box, creates FedEx labels. Drop at FedEx. Sets move from sealed storage to in-transit to WFS.</div>
+        </div>
+        <div class="build-tool">Phase 1</div>
+      </div>
+
+      <div class="build-item">
+        <div class="build-priority" style="font-size:1.5rem;">📍</div>
+        <div class="build-main">
+          <div class="build-name">Inventory Location Awareness</div>
+          <div class="build-desc">Every set in inventory knows exactly where it is — which open box, which sealed box number, in transit to WFS, or live in WFS fulfillment. When a sale comes in, the system knows which unit sold and where it came from.</div>
+        </div>
+        <div class="build-tool">Phase 1</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SALES IMPORT -->
+  <div class="section" id="section-sales">
+
+    <div class="card">
+      <div class="card-title"><span class="icon">💵</span>Multi-Platform Sales Import</div>
+      <p style="font-size:0.9rem; color:var(--text-light); line-height:1.7; margin-bottom:24px;">This closes the loop. The cost basis engine knows what everything cost. The sales import knows what everything sold for. Together they produce the real number — actual profit per unit, per platform, per period. This is what makes the tax exports accurate and the sell decision dashboard real.</p>
+
+      <div class="retailer-grid" style="margin-bottom:24px;">
+        <div class="retailer-card">
+          <div class="retailer-name">🏪 Walmart</div>
+          <div class="retailer-detail">
+            <strong>Method:</strong> WFS sales report import<br>
+            <strong>Data:</strong> Sale price, fees, units sold<br>
+            <strong>Match:</strong> By set number to inventory<br>
+            <strong>Status:</strong> Priority — WFS is primary
+          </div>
+        </div>
+        <div class="retailer-card">
+          <div class="retailer-name">📦 Amazon</div>
+          <div class="retailer-detail">
+            <strong>Method:</strong> Seller Central report or API<br>
+            <strong>Data:</strong> Sale price, FBA fees, units<br>
+            <strong>Match:</strong> By ASIN / set number<br>
+            <strong>Status:</strong> Phase 1
+          </div>
+        </div>
+        <div class="retailer-card">
+          <div class="retailer-name">🧱 Bricklink</div>
+          <div class="retailer-detail">
+            <strong>Method:</strong> Order export import<br>
+            <strong>Data:</strong> Sale price, shipping, fees<br>
+            <strong>Match:</strong> By set number<br>
+            <strong>Status:</strong> Phase 1
+          </div>
+        </div>
+        <div class="retailer-card">
+          <div class="retailer-name">🛒 eBay</div>
+          <div class="retailer-detail">
+            <strong>Method:</strong> Seller report or API<br>
+            <strong>Data:</strong> Sale price, eBay fees, shipping<br>
+            <strong>Match:</strong> By set number / SKU<br>
+            <strong>Status:</strong> Phase 1
+          </div>
+        </div>
+      </div>
+
+      <div class="vision-block">
+        <div class="vision-text">The output of sales import combined with the cost basis engine: <strong>bought here for $56.93 true cost → sold on Walmart for $89.99 → platform fees $12.40 → actual profit $20.66 per unit.</strong> Not estimated. Not approximated. Actual. Per unit. Per platform. Per period. This is the number that drives every future buy decision.</div>
+      </div>
+    </div>
+
+  </div>
+  <div class="section" id="section-timeline">
+
+    <div class="card">
+      <div class="card-title"><span class="icon">🗓️</span>Build Timeline — 12 Months to Launch</div>
+
+      <div class="timeline">
+
+        <div class="timeline-item">
+          <div class="timeline-dot">M<br>1–2</div>
+          <div class="timeline-content">
+            <div class="timeline-phase">Phase 1 — Systematize</div>
+            <div class="timeline-title">Invoice Automation + Cost Basis Engine</div>
+            <ul class="timeline-items">
+              <li>Gmail filter rules for all retailers</li>
+              <li>Auto-file to Google Drive by retailer folder</li>
+              <li>QuickBooks integration via Dext or direct</li>
+              <li>Gift card ledger built and populated</li>
+              <li>GWP calculator — core logic built and tested on real orders</li>
+              <li>Retailer rewards pools — LEGO first, then expand</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-dot">M<br>3–4</div>
+          <div class="timeline-content">
+            <div class="timeline-phase">Phase 1 — Systematize</div>
+            <div class="timeline-title">Purchase Tracking + Inventory + Reporting</div>
+            <ul class="timeline-items">
+              <li>Order pipeline with delivery tracking</li>
+              <li>Per-unit true cost basis calculation</li>
+              <li>Rakuten cashback pool with payout tracking</li>
+              <li>Tax reporting exports — purchase by period, COGS, net profit</li>
+              <li>Sell decision dashboard — true ROI per set in inventory</li>
+              <li>Existing tracker dissected and rebuilt with new architecture</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-dot">M<br>5</div>
+          <div class="timeline-content">
+            <div class="timeline-phase">Phase 1 — Systematize</div>
+            <div class="timeline-title">Keepa Intelligence Layer</div>
+            <ul class="timeline-items">
+              <li>Keepa API access established</li>
+              <li>Watchlist scanning automated</li>
+              <li>Demand and supply signals extracted</li>
+              <li>Buy/watch/pass grader integrated with cost basis engine</li>
+              <li>Chrome extension scoping for Phase 2</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-dot future">M<br>6–9</div>
+          <div class="timeline-content">
+            <div class="timeline-phase">Phase 2 — Package</div>
+            <div class="timeline-title">Refine, Package, and Soft Launch</div>
+            <ul class="timeline-items">
+              <li>Full system running on your live reselling business</li>
+              <li>Document every system as you use it — this becomes the curriculum</li>
+              <li>Social media content begins — your story, your numbers, your framework</li>
+              <li>Skool or Discord community soft launch — founding members</li>
+              <li>Founding member pricing — early access, lower cost, high touch</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-dot future">M<br>10–12</div>
+          <div class="timeline-content">
+            <div class="timeline-phase">Phase 2 — Launch</div>
+            <div class="timeline-title">Full Community Launch</div>
+            <ul class="timeline-items">
+              <li>Tool opened to paying community members</li>
+              <li>Tiered pricing — tool access vs. full system + sourcing network</li>
+              <li>Chrome extension launched alongside community</li>
+              <li>Amazon FBA layer scoping begins</li>
+              <li>Revenue from community begins funding Phase 3</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-dot horizon">M<br>12+</div>
+          <div class="timeline-content">
+            <div class="timeline-phase">Phase 3 — Choose</div>
+            <div class="timeline-title">From Strength, Not Pressure</div>
+            <ul class="timeline-items">
+              <li>Reselling business running largely on systems</li>
+              <li>Community generating independent income</li>
+              <li>Financial position to evaluate home buying readiness tool</li>
+              <li>Amazon FBA layer growing the reselling business toward $1.5M+ target</li>
+              <li>Decision point: double down on reselling OS or pivot to mortgage tool</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BUILD STACK -->
+  <div class="section" id="section-buildstack">
+
+    <div class="card">
+      <div class="card-title"><span class="icon">🛠️</span>Build Priority Order</div>
+      <p style="font-size:0.9rem; color:var(--text-light); line-height:1.7; margin-bottom:20px;">Each layer feeds the next. Invoice automation is the foundation everything else builds on. No coding experience required — Claude, Cursor, or Claude Code handles the code. You are the domain expert. That's the more valuable seat.</p>
+
+      <div class="build-item">
+        <div class="build-priority">1</div>
+        <div class="build-main">
+          <div class="build-name">Email-Driven Order Import</div>
+          <div class="build-desc">Gmail parser reads confirmation emails — extracts set numbers, prices, GWP items, shipping info. Auto-files to Drive. Pushes to QuickBooks. Creates full order record. One manual input: gift card numbers used.</div>
+        </div>
+        <div class="build-tool">Claude Code + Apps Script</div>
+      </div>
+
+      <div class="build-item">
+        <div class="build-priority">2</div>
+        <div class="build-main">
+          <div class="build-name">Retailer-Tabbed Gift Card Ledger</div>
+          <div class="build-desc">Separate tab per retailer. Face value, price paid, discount %, last 4, date, status. Single and bulk entry modes. Links to orders when used. Calculates effective discount automatically.</div>
+        </div>
+        <div class="build-tool">Claude Code</div>
+      </div>
+
+      <div class="build-item">
+        <div class="build-priority">3</div>
+        <div class="build-main">
+          <div class="build-name">GWP Calculator + Cost Basis Engine</div>
+          <div class="build-desc">All four cost layers — gift cards, retailer rewards pools, Rakuten cashback pool, GWP net proceeds. This is the feature that immediately changes sell decisions. True cost basis per unit from day one.</div>
+        </div>
+        <div class="build-tool">Claude Code</div>
+      </div>
+
+      <div class="build-item">
+        <div class="build-priority">4</div>
+        <div class="build-main">
+          <div class="build-name">Order Pipeline + Inventory Tracker</div>
+          <div class="build-desc">Live order status from placed to received. Per-unit true cost basis applied. Sell decision dashboard with real ROI. Existing tracker rebuilt with new architecture underneath.</div>
+        </div>
+        <div class="build-tool">Claude Code</div>
+      </div>
+
+      <div class="build-item">
+        <div class="build-priority">5</div>
+        <div class="build-main">
+          <div class="build-name">Physical Storage + WFS Shipping</div>
+          <div class="build-desc">Open and sealed box tracking. Set location awareness — which box, which status. Estimated weight per box. Home label printing for WFS shipments. FedEx drop-ready from storage unit.</div>
+        </div>
+        <div class="build-tool">Claude Code</div>
+      </div>
+
+      <div class="build-item">
+        <div class="build-priority">6</div>
+        <div class="build-main">
+          <div class="build-name">Multi-Platform Sales Import</div>
+          <div class="build-desc">Walmart, Amazon, Bricklink, eBay — sales data imported and matched to inventory. True profit per sale using full cost basis. P&L by platform and by set number. Closes the loop on the full business cycle.</div>
+        </div>
+        <div class="build-tool">Claude Code + APIs</div>
+      </div>
+
+      <div class="build-item">
+        <div class="build-priority">7</div>
+        <div class="build-main">
+          <div class="build-name">Tax Reporting Exports</div>
+          <div class="build-desc">Exportable reports by period using true cost basis. COGS, fees, net profit formatted for CPA and QuickBooks. No reconciliation surprises. Bookkeeper-ready from day one.</div>
+        </div>
+        <div class="build-tool">Claude Code</div>
+      </div>
+
+      <div class="build-item" style="border-left-color: var(--amber);">
+        <div class="build-priority" style="color:var(--amber);">8</div>
+        <div class="build-main">
+          <div class="build-name">Keepa Intelligence Layer</div>
+          <div class="build-desc">Keepa API access. Watchlist scanning automated. Demand/supply signals extracted. Buy grader integrated with cost basis engine. Chrome extension exploration begins here.</div>
+        </div>
+        <div class="build-tool" style="background:rgba(200,131,42,0.08); color:var(--amber);">Month 5</div>
+      </div>
+
+      <div class="build-item" style="border-left-color: var(--green);">
+        <div class="build-priority" style="color:var(--green);">9</div>
+        <div class="build-main">
+          <div class="build-name">Amazon FBA Layer</div>
+          <div class="build-desc">Ungating roadmap, wholesaler identification, prep center coordination, FBA fee calculator, shipment tracking from purchase through Amazon fulfillment centers.</div>
+        </div>
+        <div class="build-tool" style="background:rgba(42,122,74,0.08); color:var(--green);">Phase 2</div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+  function showSection(id) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('section-' + id).classList.add('active');
+    event.target.classList.add('active');
+  }
+
+  function toggleLayer(header) {
+    header.parentElement.classList.toggle('open');
+  }
+</script>
+</body>
+</html>
