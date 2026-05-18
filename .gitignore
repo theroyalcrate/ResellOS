@@ -19,3 +19,19 @@ venv/
 # OS files
 .DS_Store
 Thumbs.db
+# Additional secrets file patterns
+.env.local
+.env.*.local
+
+# Python additional
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.pytest_cache/
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
