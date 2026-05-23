@@ -335,19 +335,28 @@ def print_invoice(invoice: LegoInvoice, filename: str = "") -> None:
     print(f"{'Order Total:':<26} {fmt(invoice.order_total)}")
     print(f"\n{'Payment Method:':<26} {invoice.payment_method or 'NOT FOUND'}")
     print("\n" + "=" * 74 + "\n")
-
-
 def main() -> None:
     if len(sys.argv) < 2:
-        print("Usage: python invoice_parser.py <invoice.pdf> [invoice2.pdf ...]")
+        print("Usage: python invoice_parser.py <invoice.pdf> [--db]")
+        print("  --db    Write parsed invoices to the database")
         sys.exit(1)
 
-    for pdf_path in sys.argv[1:]:
+    write_to_db = "--db" in sys.argv
+    pdf_paths = [a for a in sys.argv[1:] if a != "--db"]
+
+    for pdf_path in pdf_paths:
         if not Path(pdf_path).exists():
             print(f"File not found: {pdf_path}")
             continue
         invoice = parse_invoice(pdf_path)
         print_invoice(invoice, filename=Path(pdf_path).name)
+
+        if write_to_db:
+            from db_writer import write_invoice
+            write_invoice(invoice)
+            print()
+
+
 
 
 if __name__ == "__main__":
