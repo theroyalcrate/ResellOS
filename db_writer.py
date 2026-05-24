@@ -157,12 +157,10 @@ def write_invoice(invoice: LegoInvoice) -> Optional[str]:
         "order_id": order_id,
         "invoice_number": invoice.invoice_number,
         "invoice_date": _parse_lego_date(invoice.invoice_date),
-        # subtotal / tax_amount / shipping_amount / payment_method added by
-        # migrations/002_add_shipment_financial_fields.sql — enable after applying.
-        # "subtotal": calculated_subtotal,
-        # "tax_amount": invoice.tax or 0,
-        # "shipping_amount": 0,
-        # "payment_method": _normalize_payment_method(invoice.payment_method),
+        "subtotal": calculated_subtotal,
+        "tax_amount": invoice.tax or 0,
+        "shipping_amount": 0,
+        "payment_method": _normalize_payment_method(invoice.payment_method),
         "shipment_status": "received",
         "entry_method": "invoice_parser",
         "no_invoice_received": False,
