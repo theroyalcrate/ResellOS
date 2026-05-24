@@ -39,6 +39,7 @@ class LegoInvoice:
     tax: Optional[float] = None
     order_total: Optional[float] = None
     payment_method: Optional[str] = None
+    payment_legs: list[tuple[str, float]] = field(default_factory=list)
 
 
 def _parse_num(s: str) -> float:
@@ -266,14 +267,21 @@ def parse_invoice(pdf_path: str) -> LegoInvoice:
     # Payment method
     # "Paid by gift card -180.42"  /  "Paid by Credit Card -19.89"
     # Balance line "Credit card 0.00" is intentionally excluded by
-    # requiring a negative (or zero) amount marker after the method name.
+    # requiring a negative amount marker after the method name.
+    # Split payments produce multiple "Paid by" lines; collect all of them.
     # ------------------------------------------------------------------ #
     for line in lines:
         s = line.strip()
-        m = re.search(r"^Paid\s+by\s+(.+?)\s+-[\d,]+\.\d{2}$", s, re.IGNORECASE)
+        m = re.search(r"^Paid\s+by\s+(.+?)\s+-([\d,]+\.\d{2})$", s, re.IGNORECASE)
         if m:
-            invoice.payment_method = m.group(1).strip()
-            break
+            invoice.payment_legs.append(
+                (m.group(1).strip(), float(m.group(2).replace(",", "")))
+            )
+
+    if len(invoice.payment_legs) == 1:
+        invoice.payment_method = invoice.payment_legs[0][0]
+    elif len(invoice.payment_legs) > 1:
+        invoice.payment_method = "mixed"
 
     return invoice
 
@@ -333,7 +341,12 @@ def print_invoice(invoice: LegoInvoice, filename: str = "") -> None:
         print(f"{'Insider Points Redeemed:':<26} -{fmt(invoice.insider_points_redeemed)}")
     print(f"{'Tax:':<26} {fmt(invoice.tax)}")
     print(f"{'Order Total:':<26} {fmt(invoice.order_total)}")
-    print(f"\n{'Payment Method:':<26} {invoice.payment_method or 'NOT FOUND'}")
+    if invoice.payment_legs:
+        for i, (method, amount) in enumerate(invoice.payment_legs):
+            label = "Payment Method:" if i == 0 else ""
+            print(f"\n{label:<26} {method}  -${amount:.2f}")
+    else:
+        print(f"\n{'Payment Method:':<26} {invoice.payment_method or 'NOT FOUND'}")
     print("\n" + "=" * 74 + "\n")
 def main() -> None:
     if len(sys.argv) < 2:

@@ -41,6 +41,8 @@ def _normalize_payment_method(method: Optional[str]) -> Optional[str]:
     if not method:
         return None
     lower = method.lower()
+    if lower == "mixed":
+        return "mixed"
     if "gift" in lower:
         return "gift_card"
     if any(w in lower for w in ("credit", "visa", "mastercard", "amex", "debit")):
@@ -126,7 +128,12 @@ def write_invoice(invoice: LegoInvoice) -> Optional[str]:
     print(f"  Order ID:       {order_id}")
     print(f"  Invoice Number: {invoice.invoice_number or 'NOT FOUND'}")
     print(f"  Invoice Date:   {invoice.invoice_date or 'NOT FOUND'}")
-    print(f"  Payment Method: {invoice.payment_method or 'NOT FOUND'}")
+    if invoice.payment_legs:
+        for i, (method, amount) in enumerate(invoice.payment_legs):
+            label = "Payment Method:" if i == 0 else "              :"
+            print(f"  {label} {method}  -${amount:.2f}")
+    else:
+        print(f"  Payment Method: {invoice.payment_method or 'NOT FOUND'}")
     print()
     print(f"  Subtotal:       ${calculated_subtotal:.2f}")
     print(f"  Tax:            ${invoice.tax or 0:.2f}")
