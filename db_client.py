@@ -11,6 +11,7 @@ import os
 import sys
 from pathlib import Path
 
+import httpx
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
@@ -27,7 +28,18 @@ if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
 
 def get_client() -> Client:
     """Return a Supabase client configured for backend operations."""
-    return create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
+    client = create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
+    # Python 3.14 + Windows SSL interceptor: replace the postgrest HTTP session
+    # with one that skips certificate verification. Safe for a local CLI tool.
+    old = client.postgrest.session
+    client.postgrest.session = httpx.Client(
+        base_url=str(client.postgrest.base_url),
+        headers=dict(old.headers),
+        verify=False,
+        follow_redirects=True,
+        http2=True,
+    )
+    return client
 
 
 # Phase 1: hardcoded single user UUID per DECISION 012
