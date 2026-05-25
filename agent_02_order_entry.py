@@ -24,7 +24,6 @@ MACYS_GOLD_THRESHOLD     = 500
 MACYS_PLATINUM_THRESHOLD = 1200
 MACYS_TIER_GAP_ALERT     = 100
 WALMART_POOL_RATE        = 0.02
-WALMART_POOL_MIN         = 250.00
 
 # Retailer-specific reward columns (only written when non-None)
 _REWARD_COLS = (
@@ -92,12 +91,16 @@ def _lego_item_points(item, order_multiplier):
     if item.get("is_gwp"):
         return 0
     m = item.get("lego_multiplier_override") or order_multiplier
-    base = int(round(item["line_total"] * LEGO_POINTS_PER_DOLLAR * m, 0))
+    # int(x + 0.5) gives round-half-up for positive values; Python's round()
+    # uses banker's rounding which would mismatch LEGO's actual calculation.
+    base = int(item["line_total"] * LEGO_POINTS_PER_DOLLAR * m + 0.5)
     return base + (item.get("lego_bonus_points") or 0)
 
 
 def _barnes_stamps(eligible, multiplier):
-    return int(eligible / BARNES_STAMP_DIVISOR) * multiplier
+    # round(eligible, 2) before dividing prevents float subtraction artifacts
+    # (e.g. 100.10 - 30.10 = 69.9999... → int(6.9999) = 6, not 7).
+    return int(round(eligible, 2) / BARNES_STAMP_DIVISOR) * multiplier
 
 
 def _kohls_rewards(spend):
@@ -105,7 +108,7 @@ def _kohls_rewards(spend):
 
 
 def _kohls_event_cash(spend):
-    return int(spend / KOHLS_EVENT_CASH_DIVISOR) * KOHLS_EVENT_CASH_BLOCK
+    return int(round(spend, 2) / KOHLS_EVENT_CASH_DIVISOR) * KOHLS_EVENT_CASH_BLOCK
 
 
 # --------------------------------------------------------------------------- #
@@ -248,8 +251,8 @@ def collect_rewards(retailer, order_date, subtotal, discount_total,
                         f"  WARNING: A Kohl's order on {order_date} already has a pickup bonus."
                     )
                     allow = get_yes_no("  Record it anyway?", default="n")
-            except Exception:
-                pass  # column may not exist yet; skip check
+            except Exception as e:
+                print(f"  NOTE: Pickup bonus duplicate check failed ({e}); proceeding without check.")
             if allow:
                 rewards["kohls_pickup_bonus"] = KOHLS_PICKUP_BONUS
                 summary.append(f"  Kohl's Pickup Bonus:   ${KOHLS_PICKUP_BONUS:.2f}")
@@ -321,11 +324,12 @@ def collect_rewards(retailer, order_date, subtotal, discount_total,
         print()
         print("  -- WALMART BUSINESS REWARDS --")
         if get_yes_no("  Order total over $250?"):
-            pool = round(subtotal * WALMART_POOL_RATE, 2)
+            spend = subtotal - discount_total
+            pool  = round(spend * WALMART_POOL_RATE, 2)
             print(f"  Pool reward (2%):  ${pool:.2f}")
             rewards["walmart_rewards_earned"] = pool
             summary.append(
-                f"  Walmart Pool Reward:   ${pool:.2f}  (2% of ${subtotal:.2f})"
+                f"  Walmart Pool Reward:   ${pool:.2f}  (2% of ${spend:.2f} post-discount)"
                 f"  → Walmart Business pool"
             )
         for it in line_items:
@@ -561,7 +565,8 @@ def write_order(order, line_items, client):
     }
     shipment_result = client.table("shipments").insert(shipment_row).execute()
     if not shipment_result.data:
-        print("ERROR: Failed to create shipment record.")
+        print("ERROR: Failed to create shipment record. Rolling back order.")
+        client.table("orders").delete().eq("order_id", order_id).execute()
         return False
     shipment_id = shipment_result.data[0]["shipment_id"]
     print(f"  OK: Shipment record created (shipment_id: {shipment_id})")
@@ -585,7 +590,9 @@ def write_order(order, line_items, client):
 
     line_result = client.table("line_items").insert(line_item_rows).execute()
     if not line_result.data:
-        print("ERROR: Failed to write line items.")
+        print("ERROR: Failed to write line items. Rolling back shipment and order.")
+        client.table("shipments").delete().eq("shipment_id", shipment_id).execute()
+        client.table("orders").delete().eq("order_id", order_id).execute()
         return False
     print(f"  OK: {len(line_result.data)} line item(s) written")
 
