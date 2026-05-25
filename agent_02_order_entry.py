@@ -145,9 +145,14 @@ def collect_order():
         barnes_stamps_earned = calculate_barnes_stamps(stamps_eligible, stamp_multiplier)
         print(f"  Auto-calculated: {barnes_stamps_earned} stamp(s)")
         print(f"  (Based on ${stamps_eligible:.2f} eligible subtotal ÷ {BARNES_STAMP_DIVISOR} × {stamp_multiplier})")
+        if get_yes_no("  Any bonus reward on this transaction?"):
+            barnes_bonus_reward = get_float("  Bonus reward amount ($)")
+        else:
+            barnes_bonus_reward = None
     else:
         stamp_multiplier = None
         barnes_stamps_earned = None
+        barnes_bonus_reward = None
 
     payment_method = get_input("Payment method", required=False)
     payment_method_detail = get_input(
@@ -215,6 +220,7 @@ def collect_order():
         "expected_item_count": sum(i["quantity"] for i in line_items),
         "expected_total": order_total,
         "barnes_stamps_earned": barnes_stamps_earned,
+        "barnes_bonus_reward": barnes_bonus_reward,
     }
 
     return order, line_items
@@ -237,6 +243,8 @@ def print_summary(order, line_items):
         print(f"  Insider Pts Ern: {order['insider_points_earned']} pts")
     if order['retailer'].upper() == "BARNES" and order.get('barnes_stamps_earned') is not None:
         print(f"  B&N Stamps Ern:  {order['barnes_stamps_earned']} stamp(s)")
+        if order.get('barnes_bonus_reward') is not None:
+            print(f"  B&N Bonus Rwrd:  ${order['barnes_bonus_reward']:.2f}")
     print(f"  Discounts:       ${order['discount_total']:.2f}")
     print(f"  ORDER TOTAL:     ${order['total']:.2f}")
     print(f"  Payment:         {order['payment_method'] or 'not specified'}")
