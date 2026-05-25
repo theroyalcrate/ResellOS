@@ -11,26 +11,44 @@ Usage: python agent_02_order_entry.py
 from datetime import date
 from db_client import get_client, PHASE_1_USER_ID
 
-LEGO_POINTS_PER_DOLLAR = 6.5
-BARNES_STAMP_DIVISOR = 10
+# --- Rewards constants ---
+LEGO_POINTS_PER_DOLLAR   = 6.5
+BARNES_STAMP_DIVISOR     = 10
+KOHLS_REWARDS_RATE       = 0.05
+KOHLS_EVENT_CASH_DIVISOR = 50
+KOHLS_EVENT_CASH_BLOCK   = 10
+KOHLS_PICKUP_BONUS       = 5.00
+MACYS_BRONZE_RATE        = 1        # 1 pt per $1
+MACYS_PTS_PER_STAR_MONEY = 1000     # 1000 pts = $10 Star Money
+MACYS_GOLD_THRESHOLD     = 500
+MACYS_PLATINUM_THRESHOLD = 1200
+MACYS_TIER_GAP_ALERT     = 100
+WALMART_POOL_RATE        = 0.02
+WALMART_POOL_MIN         = 250.00
+
+# Retailer-specific reward columns (only written when non-None)
+_REWARD_COLS = (
+    "barnes_stamps_earned", "barnes_bonus_reward",
+    "kohls_rewards_earned", "kohls_event_cash_earned", "kohls_pickup_bonus",
+    "macys_points_earned",
+    "walmart_rewards_earned",
+    "target_offer_earned",
+    "bestbuy_offer_earned",
+)
 
 
-def calculate_barnes_stamps(eligible_subtotal, multiplier):
-    """Barnes & Noble stamps: floor(eligible_subtotal / 10) * multiplier."""
-    return int(eligible_subtotal / BARNES_STAMP_DIVISOR) * multiplier
-
+# --------------------------------------------------------------------------- #
+# Input helpers
+# --------------------------------------------------------------------------- #
 
 def get_input(prompt, required=True, default=None):
-    if default:
-        display = f"{prompt} [{default}]: "
-    else:
-        display = f"{prompt}: "
+    display = f"{prompt} [{default}]: " if default is not None else f"{prompt}: "
     while True:
         value = input(display).strip()
         if value:
             return value
-        if default:
-            return default
+        if default is not None:
+            return str(default)
         if not required:
             return None
         print("  This field is required.")
@@ -38,11 +56,11 @@ def get_input(prompt, required=True, default=None):
 
 def get_float(prompt, required=True, default=None):
     while True:
-        raw = get_input(prompt, required, default)
+        raw = get_input(prompt, required, str(default) if default is not None else None)
         if raw is None:
             return None
         try:
-            return float(raw.replace("$", "").replace(",", ""))
+            return float(str(raw).replace("$", "").replace(",", ""))
         except ValueError:
             print("  Please enter a valid number (e.g. 49.99)")
 
@@ -66,13 +84,37 @@ def get_yes_no(prompt, default="n"):
         print("  Please enter y or n.")
 
 
-def calculate_lego_points(eligible_spend, multiplier):
-    """Calculate LEGO Insider points. Rate: 6.5 points per $1 USD."""
-    return int(eligible_spend * LEGO_POINTS_PER_DOLLAR * multiplier)
+# --------------------------------------------------------------------------- #
+# Rewards calculation helpers
+# --------------------------------------------------------------------------- #
+
+def _lego_item_points(item, order_multiplier):
+    if item.get("is_gwp"):
+        return 0
+    m = item.get("lego_multiplier_override") or order_multiplier
+    base = int(round(item["line_total"] * LEGO_POINTS_PER_DOLLAR * m, 0))
+    return base + (item.get("lego_bonus_points") or 0)
 
 
-def collect_line_items():
+def _barnes_stamps(eligible, multiplier):
+    return int(eligible / BARNES_STAMP_DIVISOR) * multiplier
+
+
+def _kohls_rewards(spend):
+    return round(spend * KOHLS_REWARDS_RATE, 2)
+
+
+def _kohls_event_cash(spend):
+    return int(spend / KOHLS_EVENT_CASH_DIVISOR) * KOHLS_EVENT_CASH_BLOCK
+
+
+# --------------------------------------------------------------------------- #
+# Line item collection
+# --------------------------------------------------------------------------- #
+
+def collect_line_items(retailer="", lego_order_multiplier=1):
     items = []
+    r = retailer.upper()
     print("\n  -- LINE ITEMS --")
     print("  Enter each item. Type 'done' as set name when finished.")
     print()
@@ -85,20 +127,37 @@ def collect_line_items():
                 continue
             break
         set_number = get_input("    Set number (e.g. 10242)", required=False)
-        quantity = get_int("    Quantity", default="1")
-        msrp = get_float("    MSRP (retail price)", required=False)
+        quantity   = get_int("    Quantity", default="1")
+        msrp       = get_float("    MSRP (retail price)", required=False)
         unit_price = get_float("    Price paid per unit")
-        is_gwp = get_yes_no("    Is this a GWP?")
+        is_gwp     = get_yes_no("    Is this a GWP?")
+
         item = {
-            "set_name": set_name,
-            "set_number": set_number,
-            "quantity": quantity,
-            "msrp": msrp,
-            "unit_price": unit_price,
+            "set_name":     set_name,
+            "set_number":   set_number,
+            "quantity":     quantity,
+            "msrp":         msrp,
+            "unit_price":   unit_price,
             "line_discount": round((msrp - unit_price) * quantity, 2) if msrp else 0,
-            "line_total": round(unit_price * quantity, 2),
-            "is_gwp": is_gwp,
+            "line_total":   round(unit_price * quantity, 2),
+            "is_gwp":       is_gwp,
         }
+
+        if r == "LEGO" and not is_gwp:
+            if get_yes_no(
+                f"    Per-set multiplier override? (order default ×{lego_order_multiplier})"
+            ):
+                item["lego_multiplier_override"] = get_int(
+                    "    Multiplier for this set (1/2/4)",
+                    default=str(lego_order_multiplier),
+                )
+            if get_yes_no("    Any bonus points on this set?"):
+                item["lego_bonus_points"] = get_int("    Bonus points (flat)", default="0")
+
+        if r == "WALMART" and not is_gwp:
+            if get_yes_no("    Set-specific cash reward on this item?"):
+                item["walmart_set_cash_reward"] = get_float("    Cash reward ($)")
+
         items.append(item)
         print(f"  Added: {set_name} x{quantity} @ ${unit_price:.2f}")
         if not get_yes_no("  Add another item?", default="y"):
@@ -106,25 +165,228 @@ def collect_line_items():
     return items
 
 
+# --------------------------------------------------------------------------- #
+# Retailer rewards prompts + calculations
+# --------------------------------------------------------------------------- #
+
+def collect_rewards(retailer, order_date, subtotal, discount_total,
+                    payment_method_detail, line_items, lego_order_multiplier, client):
+    """
+    Returns (rewards_dict, summary_lines).
+    rewards_dict: reward fields to merge into the order record (None values excluded).
+    summary_lines: pre-formatted strings for the order summary display.
+    """
+    r = retailer.upper()
+    rewards = {}
+    summary = []
+
+    # ------------------------------------------------------------------ LEGO
+    if r == "LEGO":
+        total_pts = sum(_lego_item_points(it, lego_order_multiplier) for it in line_items)
+        rewards["insider_points_earned"]    = total_pts
+        rewards["insider_points_multiplier"] = lego_order_multiplier
+        summary.append(f"  LEGO Insider Points:   {total_pts} pts  (order ×{lego_order_multiplier})")
+        for it in line_items:
+            if it.get("lego_multiplier_override"):
+                summary.append(
+                    f"    ↳ {it['set_name']}: ×{it['lego_multiplier_override']} override"
+                )
+            if it.get("lego_bonus_points"):
+                summary.append(
+                    f"    ↳ {it['set_name']}: +{it['lego_bonus_points']} bonus pts"
+                )
+
+    # --------------------------------------------------------------- BARNES
+    elif r == "BARNES":
+        print()
+        print("  -- BARNES & NOBLE STAMPS --")
+        stamp_multiplier = get_int(
+            "  Stamp multiplier? (1=standard, 2=double, 3=triple)", default="1"
+        )
+        eligible = subtotal - discount_total
+        stamps   = _barnes_stamps(eligible, stamp_multiplier)
+        print(f"  Auto-calculated: {stamps} stamp(s)")
+        print(f"  (Based on ${eligible:.2f} ÷ {BARNES_STAMP_DIVISOR} × {stamp_multiplier})")
+        rewards["barnes_stamps_earned"] = stamps
+        summary.append(
+            f"  B&N Stamps Earned:     {stamps}  (×{stamp_multiplier} on ${eligible:.2f})"
+        )
+        if get_yes_no("  Any bonus reward on this transaction?"):
+            bonus = get_float("  Bonus reward amount ($)")
+            rewards["barnes_bonus_reward"] = bonus
+            summary.append(f"  B&N Bonus Reward:      ${bonus:.2f}")
+
+    # --------------------------------------------------------------- KOHLS
+    elif r == "KOHLS":
+        print()
+        print("  -- KOHL'S REWARDS --")
+        spend = subtotal - discount_total
+        rc    = _kohls_rewards(spend)
+        rewards["kohls_rewards_earned"] = rc
+        summary.append(f"  Kohl's Rewards Cash:   ${rc:.2f}  (5% on ${spend:.2f})")
+        if get_yes_no("  Kohl's Cash event active?"):
+            ec     = _kohls_event_cash(spend)
+            blocks = int(spend // KOHLS_EVENT_CASH_DIVISOR)
+            rewards["kohls_event_cash_earned"] = ec
+            summary.append(f"  Kohl's Event Cash:     ${ec:.2f}  ({blocks} × ${KOHLS_EVENT_CASH_BLOCK})")
+        total_kohls = rc + (rewards.get("kohls_event_cash_earned") or 0)
+        summary.append(f"  Kohl's Total:          ${total_kohls:.2f}  → Kohl's rewards pool")
+        if get_yes_no("  In-store pickup bonus earned? (+$5.00)"):
+            allow = True
+            try:
+                dup = (
+                    client.table("orders")
+                    .select("order_id")
+                    .eq("user_id", PHASE_1_USER_ID)
+                    .ilike("retailer", "kohls")
+                    .eq("order_date", order_date)
+                    .not_.is_("kohls_pickup_bonus", "null")
+                    .execute()
+                )
+                if dup.data:
+                    print(
+                        f"  WARNING: A Kohl's order on {order_date} already has a pickup bonus."
+                    )
+                    allow = get_yes_no("  Record it anyway?", default="n")
+            except Exception:
+                pass  # column may not exist yet; skip check
+            if allow:
+                rewards["kohls_pickup_bonus"] = KOHLS_PICKUP_BONUS
+                summary.append(f"  Kohl's Pickup Bonus:   ${KOHLS_PICKUP_BONUS:.2f}")
+
+    # --------------------------------------------------------------- MACYS
+    elif r == "MACYS":
+        print()
+        print("  -- MACY'S STAR REWARDS --")
+        pm      = (payment_method_detail or "").lower()
+        has_gc  = "gift" in pm or get_yes_no("  Payment includes a gift card?")
+        if has_gc:
+            rewards["macys_points_earned"] = 0
+            summary.append("  Macy's Points:         0  (gift card — no points)")
+        else:
+            spend     = subtotal - discount_total
+            base_pts  = int(spend * MACYS_BRONZE_RATE)
+            total_pts = base_pts
+            if get_yes_no("  Bonus Day event active?"):
+                bonus_rate = get_float("  Bonus points rate per $1 (from notification)")
+                bonus_pts  = int(spend * bonus_rate)
+                total_pts  = base_pts + bonus_pts
+                summary.append(
+                    f"  Macy's Base Points:    {base_pts}  (Bronze ×{MACYS_BRONZE_RATE}/$)"
+                )
+                summary.append(
+                    f"  Macy's Bonus Points:   {bonus_pts}  (×{bonus_rate:.1f}/$)"
+                )
+            else:
+                summary.append(
+                    f"  Macy's Points:         {total_pts}  (Bronze ×{MACYS_BRONZE_RATE}/$)"
+                )
+            star_money = round(total_pts / MACYS_PTS_PER_STAR_MONEY * 10, 2)
+            summary.append(f"  Star Money This Order: ${star_money:.2f}")
+            rewards["macys_points_earned"] = total_pts
+            # Advisory tier tracking
+            try:
+                year_start = f"{date.today().year}-01-01"
+                annual = (
+                    client.table("orders")
+                    .select("subtotal, discount_total")
+                    .eq("user_id", PHASE_1_USER_ID)
+                    .ilike("retailer", "macys")
+                    .gte("order_date", year_start)
+                    .execute()
+                )
+                prior = sum(
+                    float(o.get("subtotal") or 0) - float(o.get("discount_total") or 0)
+                    for o in annual.data
+                )
+                ytd = prior + spend
+                for threshold, label in [
+                    (MACYS_PLATINUM_THRESHOLD, "Platinum"),
+                    (MACYS_GOLD_THRESHOLD,     "Gold"),
+                ]:
+                    if prior < threshold <= ytd:
+                        print(f"\n  *** Macy's {label} tier reached! (${ytd:.2f} YTD)")
+                        break
+                    elif ytd < threshold and ytd >= threshold - MACYS_TIER_GAP_ALERT:
+                        print(
+                            f"\n  NOTE: ${threshold - ytd:.2f} away from Macy's {label}"
+                            f" (${threshold} threshold)."
+                        )
+                        break
+            except Exception:
+                pass  # advisory only
+
+    # ------------------------------------------------------------- WALMART
+    elif r == "WALMART":
+        print()
+        print("  -- WALMART BUSINESS REWARDS --")
+        if get_yes_no("  Order total over $250?"):
+            pool = round(subtotal * WALMART_POOL_RATE, 2)
+            print(f"  Pool reward (2%):  ${pool:.2f}")
+            rewards["walmart_rewards_earned"] = pool
+            summary.append(
+                f"  Walmart Pool Reward:   ${pool:.2f}  (2% of ${subtotal:.2f})"
+                f"  → Walmart Business pool"
+            )
+        for it in line_items:
+            if it.get("walmart_set_cash_reward"):
+                summary.append(
+                    f"  Walmart Set Reward:    ${it['walmart_set_cash_reward']:.2f}"
+                    f"  on {it['set_name']}  → cost basis reduction"
+                )
+
+    # -------------------------------------------------------------- TARGET
+    elif r == "TARGET":
+        print()
+        print("  -- TARGET OFFERS --")
+        if get_yes_no("  Target Circle debit card used?"):
+            summary.append("  Target Circle Debit:   5% included in price paid")
+        if get_yes_no("  Any one-off Target offer applied?"):
+            offer = get_float("  Offer value ($)")
+            rewards["target_offer_earned"] = offer
+            summary.append(
+                f"  Target Offer:          ${offer:.2f}  → cost basis reduction"
+            )
+
+    # ------------------------------------------------------------- BESTBUY
+    elif r == "BESTBUY":
+        print()
+        print("  -- BEST BUY OFFERS --")
+        if get_yes_no("  Any promotional offer applied?"):
+            offer = get_float("  Offer value ($)")
+            rewards["bestbuy_offer_earned"] = offer
+            summary.append(f"  Best Buy Promo Offer:  ${offer:.2f}")
+
+    return rewards, summary
+
+
+# --------------------------------------------------------------------------- #
+# Order collection
+# --------------------------------------------------------------------------- #
+
 def collect_order():
     print("\n" + "=" * 60)
     print("  RESELLOS -- NEW ORDER ENTRY")
     print("=" * 60)
     print()
 
-    retailer = get_input("Retailer (e.g. LEGO, Target, BN)")
+    retailer     = get_input("Retailer (e.g. LEGO, Target, BN)")
     order_number = get_input("Order number")
-    order_date = get_input("Order date (YYYY-MM-DD)", default=str(date.today()))
+    order_date   = get_input("Order date (YYYY-MM-DD)", default=str(date.today()))
 
     print()
     subtotal = get_float("Subtotal (before discounts)")
-    tax_paid = get_float("Tax paid", default="0")
+    if retailer.upper() == "WALMART":
+        tax_paid = 0.0
+        print("  Tax: $0.00 (Walmart Business — tax exempt)")
+    else:
+        tax_paid = get_float("Tax paid", default="0")
     shipping = get_float("Shipping paid", default="0")
 
     print()
     print("  -- PAYMENT LAYERS --")
     gift_card_applied = get_float("Gift card amount applied", default="0")
-    rewards_applied = get_float("Rewards applied ($)", default="0")
+    rewards_applied   = get_float("Rewards applied ($)", default="0")
     if retailer.upper() == "LEGO":
         insider_points_redeemed = get_float("Insider points redeemed ($)", default="0")
     else:
@@ -132,32 +394,11 @@ def collect_order():
 
     print()
     discount_total = get_float("Total discounts applied", default="0")
-    order_total = get_float("Order total (charged to card)")
+    order_total    = get_float("Order total (charged to card)")
 
-    if retailer.upper() == "BARNES":
-        print()
-        print("  -- BARNES & NOBLE STAMPS --")
-        stamp_multiplier = get_int(
-            "Stamp multiplier for this transaction? (1=standard, 2=double, 3=triple)",
-            default="1",
-        )
-        stamps_eligible = subtotal - discount_total
-        barnes_stamps_earned = calculate_barnes_stamps(stamps_eligible, stamp_multiplier)
-        print(f"  Auto-calculated: {barnes_stamps_earned} stamp(s)")
-        print(f"  (Based on ${stamps_eligible:.2f} eligible subtotal ÷ {BARNES_STAMP_DIVISOR} × {stamp_multiplier})")
-        if get_yes_no("  Any bonus reward on this transaction?"):
-            barnes_bonus_reward = get_float("  Bonus reward amount ($)")
-        else:
-            barnes_bonus_reward = None
-    else:
-        stamp_multiplier = None
-        barnes_stamps_earned = None
-        barnes_bonus_reward = None
-
-    payment_method = get_input("Payment method", required=False)
+    payment_method        = get_input("Payment method", required=False)
     payment_method_detail = get_input(
-        "Payment detail (e.g. circle_debit, business_credit_card)",
-        required=False
+        "Payment detail (e.g. circle_debit, gift_card)", required=False
     )
 
     print()
@@ -166,67 +407,83 @@ def collect_order():
     print("           deal_software_alert, cashback_opportunity, self_discovered")
     purchase_trigger = get_input("Purchase trigger", default="planned")
 
-    print("  Tax exemption: at_purchase, retroactive_adjustment, not_applicable")
-    tax_exemption_method = get_input("Tax exemption method", default="not_applicable")
+    if retailer.upper() == "WALMART":
+        tax_exemption_method = "at_purchase"
+        print("  Tax exemption: at_purchase (Walmart default)")
+    else:
+        print("  Tax exemption: at_purchase, retroactive_adjustment, not_applicable")
+        tax_exemption_method = get_input("Tax exemption method", default="not_applicable")
 
     pickup_method = get_input(
-        "Pickup method (shipped/in_store_pickup)",
-        default="shipped"
+        "Pickup method (shipped/in_store_pickup)", default="shipped"
     )
-
-    if retailer.upper() == "LEGO":
-        print()
-        print("  -- INSIDER POINTS --")
-        insider_points_multiplier = get_int("Points multiplier (1=standard, 2=double, 4=quad)", default="1")
-        points_eligible_spend = subtotal - insider_points_redeemed
-        calculated_points = calculate_lego_points(points_eligible_spend, insider_points_multiplier)
-        print(f"  Auto-calculated: {calculated_points} points")
-        print(f"  (Based on ${points_eligible_spend:.2f} eligible spend x {LEGO_POINTS_PER_DOLLAR} x {insider_points_multiplier})")
-        insider_points_earned = get_int("Insider points earned", default=str(calculated_points))
-    else:
-        insider_points_multiplier = 1
-        insider_points_earned = 0
-
     notes = get_input("Order notes (optional)", required=False)
 
-    line_items = collect_line_items()
+    # LEGO: collect order-level multiplier before line items so per-set
+    # override prompts can show it as the default.
+    lego_order_multiplier = 1
+    if retailer.upper() == "LEGO":
+        print()
+        print("  -- LEGO INSIDER POINTS --")
+        lego_order_multiplier = get_int("  Points multiplier? (1/2/4)", default="1")
+
+    line_items = collect_line_items(
+        retailer=retailer, lego_order_multiplier=lego_order_multiplier
+    )
+
+    client = get_client()
+    rewards, rewards_summary = collect_rewards(
+        retailer, order_date, subtotal, discount_total,
+        payment_method_detail, line_items, lego_order_multiplier, client,
+    )
 
     order = {
-        "retailer": retailer,
-        "order_number": order_number,
-        "order_date": order_date,
-        "subtotal": subtotal,
-        "tax_paid": tax_paid,
-        "tax_exempt": tax_exemption_method == "at_purchase",
-        "shipping": shipping,
-        "gift_card_applied": gift_card_applied,
-        "rewards_applied": rewards_applied,
-        "insider_points_redeemed": insider_points_redeemed,
-        "insider_points_earned": insider_points_earned,
-        "insider_points_multiplier": insider_points_multiplier,
-        "discount_total": discount_total,
-        "total": order_total,
-        "payment_method": payment_method,
-        "payment_method_detail": payment_method_detail,
-        "purchase_trigger": purchase_trigger,
-        "tax_exemption_method": tax_exemption_method,
-        "pickup_method": pickup_method,
-        "notes": notes,
-        "entry_method": "manual",
-        "invoice_expected": True,
-        "reconciliation_status": "pending",
-        "cost_basis_state": "estimated",
-        "order_status": "confirmed",
-        "expected_item_count": sum(i["quantity"] for i in line_items),
-        "expected_total": order_total,
-        "barnes_stamps_earned": barnes_stamps_earned,
-        "barnes_bonus_reward": barnes_bonus_reward,
+        "retailer":                  retailer,
+        "order_number":              order_number,
+        "order_date":                order_date,
+        "subtotal":                  subtotal,
+        "tax_paid":                  tax_paid,
+        "tax_exempt":                (
+            retailer.upper() == "WALMART" or tax_exemption_method == "at_purchase"
+        ),
+        "shipping":                  shipping,
+        "gift_card_applied":         gift_card_applied,
+        "rewards_applied":           rewards_applied,
+        "insider_points_redeemed":   insider_points_redeemed,
+        "insider_points_earned":     rewards.get("insider_points_earned", 0),
+        "insider_points_multiplier": rewards.get("insider_points_multiplier", 1),
+        "discount_total":            discount_total,
+        "total":                     order_total,
+        "payment_method":            payment_method,
+        "payment_method_detail":     payment_method_detail,
+        "purchase_trigger":          purchase_trigger,
+        "tax_exemption_method":      tax_exemption_method,
+        "pickup_method":             pickup_method,
+        "notes":                     notes,
+        "entry_method":              "manual",
+        "invoice_expected":          True,
+        "reconciliation_status":     "pending",
+        "cost_basis_state":          "estimated",
+        "order_status":              "confirmed",
+        "expected_item_count":       sum(i["quantity"] for i in line_items),
+        "expected_total":            order_total,
     }
 
-    return order, line_items
+    # Retailer-specific reward fields: only include when non-None so we don't
+    # reference columns that may not exist for other retailers.
+    for col in _REWARD_COLS:
+        val = rewards.get(col)
+        if val is not None:
+            order[col] = val
+
+    return order, line_items, rewards_summary, client
 
 
-def print_summary(order, line_items):
+# --------------------------------------------------------------------------- #
+# Summary
+# --------------------------------------------------------------------------- #
+
+def print_summary(order, line_items, rewards_summary):
     print("\n" + "=" * 60)
     print("  ORDER SUMMARY -- REVIEW BEFORE SAVING")
     print("=" * 60)
@@ -238,34 +495,40 @@ def print_summary(order, line_items):
     print(f"  Shipping:        ${order['shipping']:.2f}")
     print(f"  Gift Card:       ${order['gift_card_applied']:.2f}")
     print(f"  Rewards:         ${order['rewards_applied']:.2f}")
-    if order['retailer'].upper() == "LEGO":
+    if order['retailer'].upper() == "LEGO" and order.get("insider_points_redeemed"):
         print(f"  Insider Pts Red: ${order['insider_points_redeemed']:.2f}")
-        print(f"  Insider Pts Ern: {order['insider_points_earned']} pts")
-    if order['retailer'].upper() == "BARNES" and order.get('barnes_stamps_earned') is not None:
-        print(f"  B&N Stamps Ern:  {order['barnes_stamps_earned']} stamp(s)")
-        if order.get('barnes_bonus_reward') is not None:
-            print(f"  B&N Bonus Rwrd:  ${order['barnes_bonus_reward']:.2f}")
     print(f"  Discounts:       ${order['discount_total']:.2f}")
     print(f"  ORDER TOTAL:     ${order['total']:.2f}")
     print(f"  Payment:         {order['payment_method'] or 'not specified'}")
     print(f"  Tax Treatment:   {order['tax_exemption_method']}")
     print(f"  Trigger:         {order['purchase_trigger']}")
+
+    if rewards_summary:
+        print()
+        print("  -- REWARDS --")
+        for line in rewards_summary:
+            print(line)
+
     print()
     print(f"  LINE ITEMS ({len(line_items)}):")
     for i, item in enumerate(line_items, 1):
         gwp_flag = " [GWP]" if item["is_gwp"] else ""
         print(f"  {i}. {item['set_name']}{gwp_flag}")
-        print(f"     Qty: {item['quantity']} | "
-              f"Price: ${item['unit_price']:.2f} | "
-              f"Total: ${item['line_total']:.2f}")
+        print(
+            f"     Qty: {item['quantity']} | "
+            f"Price: ${item['unit_price']:.2f} | "
+            f"Total: ${item['line_total']:.2f}"
+        )
         if item.get("set_number"):
             print(f"     Set #: {item['set_number']}")
     print("=" * 60)
 
 
-def write_order(order, line_items):
-    client = get_client()
+# --------------------------------------------------------------------------- #
+# Database write
+# --------------------------------------------------------------------------- #
 
+def write_order(order, line_items, client):
     existing = (
         client.table("orders")
         .select("order_id")
@@ -280,7 +543,7 @@ def write_order(order, line_items):
             return False
 
     print("\n  Writing order...")
-    order_row = {**order, "user_id": PHASE_1_USER_ID}
+    order_row    = {**order, "user_id": PHASE_1_USER_ID}
     order_result = client.table("orders").insert(order_row).execute()
     if not order_result.data:
         print("ERROR: Failed to write order.")
@@ -290,10 +553,10 @@ def write_order(order, line_items):
 
     print("  Creating shipment record...")
     shipment_row = {
-        "user_id": PHASE_1_USER_ID,
-        "order_id": order_id,
+        "user_id":         PHASE_1_USER_ID,
+        "order_id":        order_id,
         "shipment_status": "pending",
-        "entry_method": "manual",
+        "entry_method":    "manual",
         "no_invoice_received": False,
     }
     shipment_result = client.table("shipments").insert(shipment_row).execute()
@@ -307,17 +570,17 @@ def write_order(order, line_items):
     line_item_rows = []
     for item in line_items:
         line_item_rows.append({
-            "user_id": PHASE_1_USER_ID,
-            "order_id": order_id,
-            "shipment_id": shipment_id,
-            "set_name": item["set_name"],
-            "set_number": item.get("set_number"),
-            "quantity": item["quantity"],
-            "unit_price": item["unit_price"],
-            "msrp": item.get("msrp"),
+            "user_id":      PHASE_1_USER_ID,
+            "order_id":     order_id,
+            "shipment_id":  shipment_id,
+            "set_name":     item["set_name"],
+            "set_number":   item.get("set_number"),
+            "quantity":     item["quantity"],
+            "unit_price":   item["unit_price"],
+            "msrp":         item.get("msrp"),
             "line_discount": item["line_discount"],
-            "line_total": item["line_total"],
-            "is_gwp": item["is_gwp"],
+            "line_total":   item["line_total"],
+            "is_gwp":       item["is_gwp"],
         })
 
     line_result = client.table("line_items").insert(line_item_rows).execute()
@@ -335,12 +598,16 @@ def write_order(order, line_items):
     return True
 
 
+# --------------------------------------------------------------------------- #
+# Main
+# --------------------------------------------------------------------------- #
+
 def main():
-    order, line_items = collect_order()
-    print_summary(order, line_items)
+    order, line_items, rewards_summary, client = collect_order()
+    print_summary(order, line_items, rewards_summary)
     print()
     if get_yes_no("Save this order to the database?", default="n"):
-        write_order(order, line_items)
+        write_order(order, line_items, client)
     else:
         print("\nOrder entry cancelled. Nothing was saved.")
 
