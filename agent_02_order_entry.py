@@ -119,7 +119,10 @@ def collect_order():
     print("  -- PAYMENT LAYERS --")
     gift_card_applied = get_float("Gift card amount applied", default="0")
     rewards_applied = get_float("Rewards applied ($)", default="0")
-    insider_points_redeemed = get_float("Insider points redeemed ($)", default="0")
+    if retailer.upper() == "LEGO":
+        insider_points_redeemed = get_float("Insider points redeemed ($)", default="0")
+    else:
+        insider_points_redeemed = 0
 
     print()
     discount_total = get_float("Total discounts applied", default="0")
@@ -144,14 +147,18 @@ def collect_order():
         default="shipped"
     )
 
-    print()
-    print("  -- INSIDER POINTS --")
-    insider_points_multiplier = get_int("Points multiplier (1=standard, 2=double, 4=quad)", default="1")
-    points_eligible_spend = subtotal - insider_points_redeemed
-    calculated_points = calculate_lego_points(points_eligible_spend, insider_points_multiplier)
-    print(f"  Auto-calculated: {calculated_points} points")
-    print(f"  (Based on ${points_eligible_spend:.2f} eligible spend x {LEGO_POINTS_PER_DOLLAR} x {insider_points_multiplier})")
-    insider_points_earned = get_int("Insider points earned", default=str(calculated_points))
+    if retailer.upper() == "LEGO":
+        print()
+        print("  -- INSIDER POINTS --")
+        insider_points_multiplier = get_int("Points multiplier (1=standard, 2=double, 4=quad)", default="1")
+        points_eligible_spend = subtotal - insider_points_redeemed
+        calculated_points = calculate_lego_points(points_eligible_spend, insider_points_multiplier)
+        print(f"  Auto-calculated: {calculated_points} points")
+        print(f"  (Based on ${points_eligible_spend:.2f} eligible spend x {LEGO_POINTS_PER_DOLLAR} x {insider_points_multiplier})")
+        insider_points_earned = get_int("Insider points earned", default=str(calculated_points))
+    else:
+        insider_points_multiplier = 1
+        insider_points_earned = 0
 
     notes = get_input("Order notes (optional)", required=False)
 
