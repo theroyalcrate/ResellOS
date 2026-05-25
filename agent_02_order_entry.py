@@ -12,6 +12,12 @@ from datetime import date
 from db_client import get_client, PHASE_1_USER_ID
 
 LEGO_POINTS_PER_DOLLAR = 6.5
+BARNES_STAMP_DIVISOR = 10
+
+
+def calculate_barnes_stamps(eligible_subtotal, multiplier):
+    """Barnes & Noble stamps: floor(eligible_subtotal / 10) * multiplier."""
+    return int(eligible_subtotal / BARNES_STAMP_DIVISOR) * multiplier
 
 
 def get_input(prompt, required=True, default=None):
@@ -127,6 +133,22 @@ def collect_order():
     print()
     discount_total = get_float("Total discounts applied", default="0")
     order_total = get_float("Order total (charged to card)")
+
+    if retailer.upper() == "BARNES":
+        print()
+        print("  -- BARNES & NOBLE STAMPS --")
+        stamp_multiplier = get_int(
+            "Stamp multiplier for this transaction? (1=standard, 2=double, 3=triple)",
+            default="1",
+        )
+        stamps_eligible = subtotal - discount_total
+        barnes_stamps_earned = calculate_barnes_stamps(stamps_eligible, stamp_multiplier)
+        print(f"  Auto-calculated: {barnes_stamps_earned} stamp(s)")
+        print(f"  (Based on ${stamps_eligible:.2f} eligible subtotal ÷ {BARNES_STAMP_DIVISOR} × {stamp_multiplier})")
+    else:
+        stamp_multiplier = None
+        barnes_stamps_earned = None
+
     payment_method = get_input("Payment method", required=False)
     payment_method_detail = get_input(
         "Payment detail (e.g. circle_debit, business_credit_card)",
@@ -192,6 +214,7 @@ def collect_order():
         "order_status": "confirmed",
         "expected_item_count": sum(i["quantity"] for i in line_items),
         "expected_total": order_total,
+        "barnes_stamps_earned": barnes_stamps_earned,
     }
 
     return order, line_items
@@ -209,8 +232,11 @@ def print_summary(order, line_items):
     print(f"  Shipping:        ${order['shipping']:.2f}")
     print(f"  Gift Card:       ${order['gift_card_applied']:.2f}")
     print(f"  Rewards:         ${order['rewards_applied']:.2f}")
-    print(f"  Insider Pts Red: ${order['insider_points_redeemed']:.2f}")
-    print(f"  Insider Pts Ern: {order['insider_points_earned']} pts")
+    if order['retailer'].upper() == "LEGO":
+        print(f"  Insider Pts Red: ${order['insider_points_redeemed']:.2f}")
+        print(f"  Insider Pts Ern: {order['insider_points_earned']} pts")
+    if order['retailer'].upper() == "BARNES" and order.get('barnes_stamps_earned') is not None:
+        print(f"  B&N Stamps Ern:  {order['barnes_stamps_earned']} stamp(s)")
     print(f"  Discounts:       ${order['discount_total']:.2f}")
     print(f"  ORDER TOTAL:     ${order['total']:.2f}")
     print(f"  Payment:         {order['payment_method'] or 'not specified'}")
