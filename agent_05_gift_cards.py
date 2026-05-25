@@ -98,12 +98,13 @@ def collect_card(retailer=None):
         "retailer": retailer,
         "face_value": face_value,
         "purchase_price": price_paid,
+        "discount_pct": round(discount_pct, 2),
         "purchase_date": purchase_date,
         "remaining_balance": face_value,
         "status": "available",
         "card_number_last4": last_four,
         "notes": notes,
-        "_discount_pct": discount_pct,  # display-only, not written to DB
+        "_discount_pct": discount_pct,  # kept for print_card_summary display
     }
 
 
