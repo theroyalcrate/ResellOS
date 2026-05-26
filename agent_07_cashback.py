@@ -310,12 +310,36 @@ def mode_earn(client):
     platform = pick_platform()
     show_onboarding_if_new(platform, client)
 
+    existing = (
+        client.table("cashback_transactions")
+        .select("cb_id, status")
+        .eq("user_id", PHASE_1_USER_ID)
+        .eq("order_id", order["order_id"])
+        .eq("source", platform)
+        .not_.in_("status", ["ineligible", "written_off"])
+        .execute()
+    )
+    if existing.data:
+        ex = existing.data[0]
+        print(
+            f"\n  *** WARNING: A {platform} cashback entry for order "
+            f"{order_number} already exists "
+            f"(cb_id: {ex['cb_id']}, status: {ex['status']}). ***"
+        )
+        if not get_yes_no("Record another entry anyway?", default="n"):
+            print("  Cancelled.")
+            return
+
     if platform == "RetailMeNot":
         rmn_check_sameday(order["retailer"], order["order_date"], client)
         rmn_check_monthly_caps(order["retailer"], order["order_date"], client)
         print()
 
-    rate = get_float(f"Cashback rate applied (%) for {platform}")
+    while True:
+        rate = get_float(f"Cashback rate applied (%) for {platform}")
+        if rate > 0:
+            break
+        print("  Rate must be greater than 0.")
     expected = round(pretax_spend * rate / 100, 2)
     print(f"  Expected cashback: ${expected:.2f}  ({rate}% × ${pretax_spend:.2f})")
 
@@ -405,14 +429,14 @@ def mode_payout(client):
         )
         .eq("user_id", PHASE_1_USER_ID)
         .eq("source", platform)
-        .eq("status", "pending")
+        .in_("status", ["pending", "confirmed"])
         .order("transaction_date")
         .execute()
     )
     pending = result.data or []
 
     if not pending:
-        print(f"\n  No pending cashback transactions for {platform}.")
+        print(f"\n  No pending or confirmed cashback transactions for {platform}.")
         return
 
     today = date.today()
@@ -696,6 +720,11 @@ def mode_review(client):
             f"  Selected: #{raw}  {tx.get('order_number')} — "
             f"{tx.get('retailer')} — ${float(tx['cashback_amount']):.2f}  [{tx['status']}]"
         )
+        if tx["status"] == "written_off":
+            print("\n  *** WARNING: This transaction has been written off. Proceeding will reopen it. ***")
+            if not get_yes_no("Reopen this written-off transaction?", default="n"):
+                print("  Skipped.")
+                continue
         print(f"  Choose new status: {' / '.join(UPDATABLE_STATUSES)}")
         new_status = get_input("New status")
         if new_status not in UPDATABLE_STATUSES:
