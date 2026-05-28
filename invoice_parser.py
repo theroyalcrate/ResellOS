@@ -24,6 +24,7 @@ class LineItem:
     unit_price: float       # retail price per unit (before discount)
     net_price: float        # price per unit actually paid (0.00 for GWP)
     is_gwp: bool = False
+    set_number: Optional[str] = None
 
 
 @dataclass
@@ -40,6 +41,17 @@ class LegoInvoice:
     order_total: Optional[float] = None
     payment_method: Optional[str] = None
     payment_legs: list[tuple[str, float]] = field(default_factory=list)
+
+
+def _extract_set_number(description: str) -> Optional[str]:
+    """
+    Find the public LEGO set number (4-5 digits) embedded in a description.
+    Strip the trailing version tag (e.g. V39) first so it doesn't interfere,
+    then return the last standalone 4-5 digit match.
+    """
+    clean = re.sub(r"\s+V\d+\s*$", "", description, flags=re.IGNORECASE)
+    matches = re.findall(r"\b(\d{4,5})\b", clean)
+    return matches[-1] if matches else None
 
 
 def _parse_num(s: str) -> float:
@@ -213,14 +225,16 @@ def parse_invoice(pdf_path: str) -> LegoInvoice:
         unit_price = _parse_num(m.group(4))
         rest = m.group(5)
         net_price = _parse_net_price(unit_price, rest)
+        desc = m.group(2).strip()
         invoice.line_items.append(
             LineItem(
                 article_number=m.group(1),
-                description=m.group(2).strip(),
+                description=desc,
                 quantity=int(m.group(3)),
                 unit_price=unit_price,
                 net_price=net_price,
                 is_gwp=(net_price == 0.0),
+                set_number=_extract_set_number(desc),
             )
         )
 
@@ -324,9 +338,10 @@ def print_invoice(invoice: LegoInvoice, filename: str = "") -> None:
             discount = item.unit_price - item.net_price
             disc_str = f"-${discount:.2f}" if discount > 0 else ""
             flag = "  [GWP]" if item.is_gwp else ""
+            set_tag = f"  [{item.set_number}]" if item.set_number else ""
             print(
                 f"{item.article_number:<10} {desc:<32} {item.quantity:>4} "
-                f"${item.unit_price:>7.2f} ${item.net_price:>8.2f} {disc_str:>9}{flag}"
+                f"${item.unit_price:>7.2f} ${item.net_price:>8.2f} {disc_str:>9}{flag}{set_tag}"
             )
     else:
         print("  No line items extracted.")

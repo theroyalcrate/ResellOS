@@ -129,11 +129,12 @@ def collect_line_items(retailer="", lego_order_multiplier=1):
                 print("  At least one item is required.")
                 continue
             break
-        set_number = get_input("    Set number (e.g. 10242)", required=False)
-        quantity   = get_int("    Quantity", default="1")
-        msrp       = get_float("    MSRP (retail price)", required=False)
-        unit_price = get_float("    Price paid per unit")
-        is_gwp     = get_yes_no("    Is this a GWP?")
+        set_number  = get_input("    Set number (e.g. 10242)", required=False)
+        quantity    = get_int("    Quantity", default="1")
+        msrp        = get_float("    MSRP (retail price)", required=False)
+        unit_price  = get_float("    Price paid per unit")
+        is_gwp      = get_yes_no("    Is this a GWP?")
+        is_retiring = get_yes_no("    Retiring set?", default="y")
 
         item = {
             "set_name":     set_name,
@@ -144,6 +145,7 @@ def collect_line_items(retailer="", lego_order_multiplier=1):
             "line_discount": round((msrp - unit_price) * quantity, 2) if msrp else 0,
             "line_total":   round(unit_price * quantity, 2),
             "is_gwp":       is_gwp,
+            "is_retiring":  is_retiring,
         }
 
         if r == "LEGO" and not is_gwp:
@@ -421,6 +423,8 @@ def collect_order():
     pickup_method = get_input(
         "Pickup method (shipped/in_store_pickup)", default="shipped"
     )
+    print("  Buy reason: sale_gwp, clearance_opportunistic")
+    buy_reason = get_input("Buy reason", default="sale_gwp")
     notes = get_input("Order notes (optional)", required=False)
 
     # LEGO: collect order-level multiplier before line items so per-set
@@ -463,6 +467,7 @@ def collect_order():
         "purchase_trigger":          purchase_trigger,
         "tax_exemption_method":      tax_exemption_method,
         "pickup_method":             pickup_method,
+        "buy_reason":                buy_reason,
         "notes":                     notes,
         "entry_method":              "manual",
         "invoice_expected":          True,
@@ -506,6 +511,7 @@ def print_summary(order, line_items, rewards_summary):
     print(f"  Payment:         {order['payment_method'] or 'not specified'}")
     print(f"  Tax Treatment:   {order['tax_exemption_method']}")
     print(f"  Trigger:         {order['purchase_trigger']}")
+    print(f"  Buy Reason:      {order.get('buy_reason') or 'not specified'}")
 
     if rewards_summary:
         print()
@@ -525,6 +531,8 @@ def print_summary(order, line_items, rewards_summary):
         )
         if item.get("set_number"):
             print(f"     Set #: {item['set_number']}")
+        if not item.get("is_retiring", True):
+            print(f"     Retiring: No")
     print("=" * 60)
 
 
@@ -586,6 +594,7 @@ def write_order(order, line_items, client):
             "line_discount": item["line_discount"],
             "line_total":   item["line_total"],
             "is_gwp":       item["is_gwp"],
+            "is_retiring":  item.get("is_retiring", True),
         })
 
     line_result = client.table("line_items").insert(line_item_rows).execute()

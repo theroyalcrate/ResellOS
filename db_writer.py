@@ -191,7 +191,7 @@ def write_invoice(invoice: LegoInvoice) -> Optional[str]:
             "shipment_id": shipment_id,
             "article_number": item.article_number,
             "set_name": item.description,
-            "set_number": None,
+            "set_number": item.set_number,
             "quantity": item.quantity,
             "unit_price": item.net_price,
             "msrp": item.unit_price,
