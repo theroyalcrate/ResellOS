@@ -409,9 +409,9 @@ def collect_order():
 
     print()
     print("  -- ORDER SETTINGS --")
-    print("  Trigger: planned, planned_seasonal, community_alert,")
-    print("           deal_software_alert, cashback_opportunity, self_discovered")
-    purchase_trigger = get_input("Purchase trigger", default="planned")
+    print("  Trigger: community_alert, deal_software_alert, self_discovered")
+    print("  (leave blank if channel is unknown or not applicable)")
+    purchase_trigger = get_input("Purchase trigger", required=False) or None
 
     if retailer.upper() == "WALMART":
         tax_exemption_method = "at_purchase"
@@ -423,8 +423,10 @@ def collect_order():
     pickup_method = get_input(
         "Pickup method (shipped/in_store_pickup)", default="shipped"
     )
-    print("  Buy reason: sale_gwp, clearance_opportunistic")
-    buy_reason = get_input("Buy reason", default="sale_gwp")
+    print("  Buy reason: planned, opportunistic, promo_expiration")
+    print("  planned=targeted buy  opportunistic=deal found me  promo_expiration=expiring cash/points")
+    print("  (leave blank if none apply)")
+    buy_reason = get_input("Buy reason", required=False) or None
     notes = get_input("Order notes (optional)", required=False)
 
     # LEGO: collect order-level multiplier before line items so per-set
@@ -510,7 +512,7 @@ def print_summary(order, line_items, rewards_summary):
     print(f"  ORDER TOTAL:     ${order['total']:.2f}")
     print(f"  Payment:         {order['payment_method'] or 'not specified'}")
     print(f"  Tax Treatment:   {order['tax_exemption_method']}")
-    print(f"  Trigger:         {order['purchase_trigger']}")
+    print(f"  Trigger:         {order.get('purchase_trigger') or 'not specified'}")
     print(f"  Buy Reason:      {order.get('buy_reason') or 'not specified'}")
 
     if rewards_summary:
