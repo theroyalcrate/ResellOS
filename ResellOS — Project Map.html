@@ -7,465 +7,113 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0A0E14;
-    --bg2: #0F1520;
-    --bg3: #141C2A;
-    --border: rgba(0,180,255,0.12);
-    --border-bright: rgba(0,180,255,0.3);
-    --blue: #00B4FF;
-    --blue-dim: rgba(0,180,255,0.12);
-    --green: #00FF88;
-    --green-dim: rgba(0,255,136,0.12);
-    --amber: #FFB800;
-    --amber-dim: rgba(255,184,0,0.12);
-    --red: #FF4455;
-    --purple: #AA88FF;
-    --text: #C8D8E8;
-    --text-dim: rgba(200,216,232,0.5);
-    --text-bright: #EEF4FA;
-    --mono: 'IBM Plex Mono', monospace;
-    --sans: 'IBM Plex Sans', sans-serif;
+    --bg: #0A0E14; --bg2: #0F1520; --bg3: #141C2A;
+    --border: rgba(0,180,255,0.12); --border-bright: rgba(0,180,255,0.3);
+    --blue: #00B4FF; --blue-dim: rgba(0,180,255,0.12);
+    --green: #00FF88; --green-dim: rgba(0,255,136,0.12);
+    --amber: #FFB800; --amber-dim: rgba(255,184,0,0.12);
+    --red: #FF4455; --red-dim: rgba(255,68,85,0.1);
+    --purple: #AA88FF; --purple-dim: rgba(170,136,255,0.12);
+    --text: #C8D8E8; --text-dim: rgba(200,216,232,0.5); --text-bright: #EEF4FA;
+    --mono: 'IBM Plex Mono', monospace; --sans: 'IBM Plex Sans', sans-serif;
   }
-
   * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    min-height: 100vh;
-  }
-
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
   body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(0,180,255,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,180,255,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
+    content: ''; position: fixed; inset: 0;
+    background-image: linear-gradient(rgba(0,180,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,180,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px; pointer-events: none; z-index: 0;
   }
-
-  .wrap {
-    position: relative;
-    z-index: 1;
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 60px 32px 120px;
-  }
-
-  /* Header */
-  .header {
-    margin-bottom: 56px;
-    padding-bottom: 32px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .header-tag {
-    font-family: var(--mono);
-    font-size: 0.72rem;
-    color: var(--blue);
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    margin-bottom: 12px;
-  }
-
-  .header-title {
-    font-family: var(--mono);
-    font-size: clamp(2rem, 5vw, 3.5rem);
-    font-weight: 600;
-    color: var(--text-bright);
-    letter-spacing: -0.03em;
-    margin-bottom: 8px;
-  }
-
+  .wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 60px 32px 120px; }
+  .header { margin-bottom: 56px; padding-bottom: 32px; border-bottom: 1px solid var(--border); }
+  .header-tag { font-family: var(--mono); font-size: 0.72rem; color: var(--blue); letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 12px; }
+  .header-title { font-family: var(--mono); font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 600; color: var(--text-bright); letter-spacing: -0.03em; margin-bottom: 8px; }
   .header-title span { color: var(--blue); }
-
-  .header-sub {
-    font-size: 0.88rem;
-    color: var(--text-dim);
-    font-weight: 300;
-    margin-bottom: 28px;
-    line-height: 1.6;
-  }
-
-  .header-stats {
-    display: flex;
-    gap: 32px;
-    flex-wrap: wrap;
-  }
-
-  .hstat-val {
-    font-family: var(--mono);
-    font-size: 1.3rem;
-    font-weight: 600;
-    color: var(--green);
-  }
-
-  .hstat-label {
-    font-size: 0.65rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-    margin-top: 2px;
-  }
-
-  /* Timeline summary */
-  .timeline-summary {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 12px;
-    margin-bottom: 48px;
-  }
-
-  .ts-item {
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    padding: 16px 18px;
-    border-top: 2px solid var(--blue);
-  }
-
-  .ts-phase {
-    font-family: var(--mono);
-    font-size: 0.65rem;
-    color: var(--blue);
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-  }
-
-  .ts-title {
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: var(--text-bright);
-    margin-bottom: 4px;
-    line-height: 1.3;
-  }
-
-  .ts-time {
-    font-family: var(--mono);
-    font-size: 0.72rem;
-    color: var(--amber);
-  }
-
-  .ts-item.complete { border-top-color: var(--green); }
-  .ts-item.complete .ts-phase { color: var(--green); }
+  .header-sub { font-size: 0.88rem; color: var(--text-dim); font-weight: 300; margin-bottom: 28px; line-height: 1.6; }
+  .header-stats { display: flex; gap: 32px; flex-wrap: wrap; }
+  .hstat-val { font-family: var(--mono); font-size: 1.3rem; font-weight: 600; color: var(--green); }
+  .hstat-label { font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); margin-top: 2px; }
+  .timeline-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 48px; }
+  .ts-item { background: var(--bg2); border: 1px solid var(--border); padding: 14px 16px; }
+  .ts-item.complete { border-color: rgba(0,255,136,0.3); background: var(--green-dim); }
+  .ts-item.current { border-color: rgba(255,184,0,0.4); background: var(--amber-dim); }
+  .ts-phase { font-family: var(--mono); font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .ts-title { font-family: var(--mono); font-size: 0.78rem; color: var(--text-bright); font-weight: 600; margin-bottom: 4px; }
+  .ts-time { font-size: 0.72rem; color: var(--text-dim); }
   .ts-item.complete .ts-time { color: var(--green); }
-
-  /* Phase blocks */
-  .phase {
-    margin-bottom: 48px;
-  }
-
-  .phase-header {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 20px;
-    padding: 16px 20px;
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-left: 4px solid var(--blue);
-  }
-
-  .phase-header.complete { border-left-color: var(--green); }
-  .phase-header.launch { border-left-color: var(--amber); }
-  .phase-header.future { border-left-color: var(--purple); }
-
-  .phase-num {
-    font-family: var(--mono);
-    font-size: 1.4rem;
-    font-weight: 600;
-    color: var(--blue);
-    min-width: 48px;
-  }
-
-  .phase-header.complete .phase-num { color: var(--green); }
-  .phase-header.launch .phase-num { color: var(--amber); }
-  .phase-header.future .phase-num { color: var(--purple); }
-
+  .ts-item.current .ts-time { color: var(--amber); }
+  .phase { margin-bottom: 48px; }
+  .phase-header { display: flex; align-items: center; gap: 20px; padding: 20px 24px; background: var(--bg2); border: 1px solid var(--border); margin-bottom: 2px; }
+  .phase-header.complete { border-color: rgba(0,255,136,0.3); background: var(--green-dim); }
+  .phase-header.current { border-color: rgba(255,184,0,0.4); background: var(--amber-dim); }
+  .phase-header.launch { border-color: rgba(170,136,255,0.3); background: var(--purple-dim); }
+  .phase-num { font-family: var(--mono); font-size: 1.4rem; font-weight: 600; color: var(--blue); min-width: 40px; }
+  .phase-title { font-family: var(--mono); font-size: 0.95rem; font-weight: 600; color: var(--text-bright); }
+  .phase-meta { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; }
   .phase-info { flex: 1; }
-
-  .phase-title {
-    font-family: var(--mono);
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--text-bright);
-    margin-bottom: 3px;
-  }
-
-  .phase-meta {
-    font-size: 0.78rem;
-    color: var(--text-dim);
-    font-weight: 300;
-  }
-
-  .phase-tags {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .tag {
-    font-family: var(--mono);
-    font-size: 0.62rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 3px 8px;
-    border: 1px solid;
-  }
-
-  .tag-done { border-color: rgba(0,255,136,0.4); color: var(--green); background: var(--green-dim); }
-  .tag-next { border-color: rgba(0,180,255,0.4); color: var(--blue); }
-  .tag-later { border-color: rgba(255,184,0,0.3); color: var(--amber); }
-  .tag-premium { border-color: rgba(170,136,255,0.3); color: var(--purple); }
-
-  /* Week blocks */
-  .week {
-    background: var(--bg3);
-    border: 1px solid var(--border);
-    margin-bottom: 12px;
-    overflow: hidden;
-  }
-
-  .week-header {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 12px 18px;
-    background: rgba(0,0,0,0.2);
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-
+  .phase-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag { display: inline-block; padding: 3px 8px; font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; }
+  .tag-done { background: var(--green-dim); color: var(--green); border: 1px solid rgba(0,255,136,0.3); }
+  .tag-current { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(255,184,0,0.3); }
+  .tag-next { background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(0,180,255,0.3); }
+  .tag-later { background: var(--bg3); color: var(--text-dim); border: 1px solid var(--border); }
+  .week { background: var(--bg3); border: 1px solid var(--border); margin-bottom: 2px; }
+  .week-header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; cursor: pointer; transition: background 0.15s; }
   .week-header:hover { background: rgba(0,180,255,0.05); }
-
-  .week-num {
-    font-family: var(--mono);
-    font-size: 0.72rem;
-    color: var(--blue);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    min-width: 60px;
-  }
-
-  .week-title {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-bright);
-    flex: 1;
-  }
-
-  .week-sessions {
-    font-family: var(--mono);
-    font-size: 0.68rem;
-    color: var(--text-dim);
-  }
-
-  .week-chevron {
-    color: var(--blue);
-    font-size: 0.75rem;
-    transition: transform 0.2s;
-  }
-
+  .week-num { font-family: var(--mono); font-size: 0.7rem; color: var(--blue); min-width: 60px; }
+  .week-title { font-size: 0.85rem; color: var(--text-bright); flex: 1; }
+  .week-sessions { font-family: var(--mono); font-size: 0.68rem; color: var(--text-dim); }
+  .week-chevron { color: var(--blue); transition: transform 0.2s; }
   .week.open .week-chevron { transform: rotate(180deg); }
-
-  .week-body {
-    display: none;
-    padding: 16px 18px;
-  }
-
+  .week-body { display: none; border-top: 1px solid var(--border); }
   .week.open .week-body { display: block; }
-
-  /* Sessions */
-  .session {
-    display: flex;
-    gap: 14px;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border);
-  }
-
+  .session { display: flex; align-items: flex-start; gap: 16px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
   .session:last-child { border-bottom: none; }
-
-  .session-num {
-    font-family: var(--mono);
-    font-size: 0.72rem;
-    color: var(--text-dim);
-    min-width: 32px;
-    padding-top: 1px;
-  }
-
+  .session-num { font-family: var(--mono); font-size: 0.72rem; color: var(--blue); min-width: 36px; padding-top: 2px; }
+  .session.done .session-num { color: var(--green); }
+  .session.next-up .session-num { color: var(--amber); }
+  .session-title { font-size: 0.85rem; color: var(--text-bright); margin-bottom: 4px; }
+  .session.done .session-title { color: var(--text-dim); }
+  .session-desc { font-size: 0.78rem; color: var(--text-dim); line-height: 1.5; }
+  .session-time { font-family: var(--mono); font-size: 0.68rem; color: var(--text-dim); min-width: 90px; text-align: right; padding-top: 2px; }
   .session-main { flex: 1; }
-
-  .session-title {
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: var(--text-bright);
-    margin-bottom: 3px;
-  }
-
-  .session-desc {
-    font-size: 0.78rem;
-    color: var(--text-dim);
-    line-height: 1.5;
-    font-weight: 300;
-  }
-
-  .session-time {
-    font-family: var(--mono);
-    font-size: 0.65rem;
-    color: var(--amber);
-    white-space: nowrap;
-    padding-top: 2px;
-  }
-
-  /* Milestone */
-  .milestone {
-    background: var(--blue-dim);
-    border: 1px solid var(--border-bright);
-    padding: 14px 18px;
-    margin-top: 16px;
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-  }
-
-  .milestone-icon {
-    font-size: 1rem;
-    flex-shrink: 0;
-  }
-
-  .milestone-text {
-    font-size: 0.82rem;
-    color: var(--text-bright);
-    line-height: 1.5;
-    font-weight: 300;
-  }
-
-  .milestone-text strong { color: var(--blue); font-weight: 600; }
-
-  /* Risk items */
-  .risks {
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    padding: 24px 28px;
-    margin-top: 48px;
-  }
-
-  .risks-title {
-    font-family: var(--mono);
-    font-size: 0.78rem;
-    color: var(--amber);
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .risk-item {
-    display: flex;
-    gap: 12px;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.82rem;
-  }
-
-  .risk-item:last-child { border-bottom: none; }
-
-  .risk-label {
-    font-family: var(--mono);
-    font-size: 0.68rem;
-    color: var(--amber);
-    min-width: 80px;
-    padding-top: 1px;
-  }
-
-  .risk-desc { color: var(--text); font-weight: 300; line-height: 1.5; }
-  .risk-desc strong { color: var(--text-bright); font-weight: 600; }
-
-  /* Footer */
-  .footer {
-    margin-top: 64px;
-    padding-top: 24px;
-    border-top: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: gap;
-    gap: 12px;
-  }
-
-  .footer-name { font-family: var(--mono); font-size: 0.85rem; color: var(--blue); }
-  .footer-meta { font-family: var(--mono); font-size: 0.62rem; color: var(--text-dim); }
-
-  @media (max-width: 600px) {
-    .wrap { padding: 32px 16px 80px; }
+  .milestone { background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--green); padding: 16px 20px; margin-top: 8px; display: flex; gap: 12px; align-items: flex-start; }
+  .milestone-icon { font-size: 1.2rem; }
+  .milestone-text { font-size: 0.85rem; color: var(--text); line-height: 1.6; }
+  .milestone-text strong { color: var(--text-bright); }
+  .note-box { background: var(--amber-dim); border: 1px solid var(--amber); padding: 12px 16px; margin-top: 8px; font-size: 0.8rem; color: var(--text); line-height: 1.6; }
+  .note-box strong { color: var(--amber); font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; display: block; margin-bottom: 4px; }
+  @media (max-width: 700px) {
     .timeline-summary { grid-template-columns: 1fr 1fr; }
+    .session { flex-wrap: wrap; }
+    .session-time { min-width: auto; text-align: left; }
   }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <!-- Header -->
   <div class="header">
-    <div class="header-tag">// Project Map — Conservative Timeline — v1.1</div>
+    <div class="header-tag">// Project Map — v2.0 — Updated 2026-05-31 — Actual session history + forward plan</div>
     <div class="header-title">Resell<span>OS</span></div>
-    <div class="header-sub">Full project roadmap from foundation to community launch. Conservative estimates with stumbles factored in. 3-5 sessions per week, 2-3 hours each. Understanding over speed.</div>
+    <div class="header-sub">Actual session history through S08+S8.5, then forward plan to community launch. Defer to Session Log for exact build state. Session numbers here reflect what was actually built, not original plan.</div>
     <div class="header-stats">
-      <div><div class="hstat-val">4-5 mo</div><div class="hstat-label">To community launch</div></div>
-      <div><div class="hstat-val">7-8 mo</div><div class="hstat-label">To Keepa Build 2</div></div>
-      <div><div class="hstat-val">40</div><div class="hstat-label">Sessions planned</div></div>
-      <div><div class="hstat-val">7</div><div class="hstat-label">Phases</div></div>
+      <div><div class="hstat-val">S08+S8.5</div><div class="hstat-label">Sessions complete</div></div>
+      <div><div class="hstat-val">P1 W2</div><div class="hstat-label">Current phase</div></div>
+      <div><div class="hstat-val">7</div><div class="hstat-label">Phases total</div></div>
+      <div><div class="hstat-val">Supabase</div><div class="hstat-label">Database (no SQLite)</div></div>
     </div>
   </div>
 
-  <!-- Timeline Summary -->
   <div class="timeline-summary">
-    <div class="ts-item complete">
-      <div class="ts-phase">Phase 0</div>
-      <div class="ts-title">Foundation</div>
-      <div class="ts-time">✓ Complete</div>
-    </div>
-    <div class="ts-item">
-      <div class="ts-phase">Phase 1</div>
-      <div class="ts-title">Database + Order Flow</div>
-      <div class="ts-time">Weeks 1-4</div>
-    </div>
-    <div class="ts-item">
-      <div class="ts-phase">Phase 2</div>
-      <div class="ts-title">Cost Basis Complete</div>
-      <div class="ts-time">Weeks 5-7</div>
-    </div>
-    <div class="ts-item">
-      <div class="ts-phase">Phase 3</div>
-      <div class="ts-title">Sales + Tax Recovery</div>
-      <div class="ts-time">Weeks 8-11</div>
-    </div>
-    <div class="ts-item">
-      <div class="ts-phase">Phase 4</div>
-      <div class="ts-title">Output Layer</div>
-      <div class="ts-time">Weeks 12-13</div>
-    </div>
-    <div class="ts-item">
-      <div class="ts-phase">Phase 5</div>
-      <div class="ts-title">Polish + Testing</div>
-      <div class="ts-time">Weeks 14-15</div>
-    </div>
-    <div class="ts-item">
-      <div class="ts-phase">Phase 6</div>
-      <div class="ts-title">Community Launch</div>
-      <div class="ts-time">Weeks 16-20</div>
-    </div>
-    <div class="ts-item">
-      <div class="ts-phase">Phase 7</div>
-      <div class="ts-title">Keepa Build 2</div>
-      <div class="ts-time">Weeks 21-28</div>
-    </div>
+    <div class="ts-item complete"><div class="ts-phase">Phase 0</div><div class="ts-title">Foundation</div><div class="ts-time">✓ Complete</div></div>
+    <div class="ts-item current"><div class="ts-phase">Phase 1</div><div class="ts-title">Order Flow + Cost Basis</div><div class="ts-time">→ In Progress (S09 next)</div></div>
+    <div class="ts-item"><div class="ts-phase">Phase 2</div><div class="ts-title">Catalog + Inventory + Sales</div><div class="ts-time">Upcoming</div></div>
+    <div class="ts-item"><div class="ts-phase">Phase 3</div><div class="ts-title">Tax Recovery</div><div class="ts-time">Upcoming</div></div>
+    <div class="ts-item"><div class="ts-phase">Phase 4</div><div class="ts-title">Output + Reporting</div><div class="ts-time">Upcoming</div></div>
+    <div class="ts-item"><div class="ts-phase">Phase 5</div><div class="ts-title">Polish + Onboarding</div><div class="ts-time">Upcoming</div></div>
+    <div class="ts-item"><div class="ts-phase">Phase 6</div><div class="ts-title">Community Launch</div><div class="ts-time">Upcoming</div></div>
+    <div class="ts-item"><div class="ts-phase">Phase 7</div><div class="ts-title">Keepa Build 2</div><div class="ts-time">Post-launch</div></div>
   </div>
 
   <!-- PHASE 0 -->
@@ -474,179 +122,83 @@
       <div class="phase-num">P0</div>
       <div class="phase-info">
         <div class="phase-title">Foundation — Complete</div>
-        <div class="phase-meta">Development environment · Gmail infrastructure · Agent 1A · Architecture document</div>
+        <div class="phase-meta">Dev environment · Gmail infrastructure · Agent 1A · Architecture document</div>
       </div>
       <div class="phase-tags"><span class="tag tag-done">Complete ✓</span></div>
     </div>
-
     <div class="week open">
-      <div class="week-header" onclick="toggleWeek(this)">
+      <div class="week-header" onclick="this.parentElement.classList.toggle('open')">
         <div class="week-num">Done</div>
-        <div class="week-title">Everything built in Phase 0</div>
-        <div class="week-sessions">2 sessions</div>
+        <div class="week-title">Phase 0 — All sessions complete</div>
+        <div class="week-sessions">4 sessions</div>
         <div class="week-chevron">▾</div>
       </div>
       <div class="week-body">
-        <div class="session"><div class="session-num">✓</div><div class="session-main"><div class="session-title">Development Environment</div><div class="session-desc">Python, Git, VS Code, Claude Code extension, GitHub repository (theroyalcrate/ResellOS), virtual environment</div></div></div>
-        <div class="session"><div class="session-num">✓</div><div class="session-main"><div class="session-title">Gmail Infrastructure</div><div class="session-desc">Personal Gmail filters forward LEGO invoices and shipping to Royal Crate. ResellOS-Invoices label created and filtering correctly.</div></div></div>
-        <div class="session"><div class="session-num">✓</div><div class="session-main"><div class="session-title">Agent 1A — LEGO Invoice Parser</div><div class="session-desc">PDF parser working. Handles standard orders, GWP, discount column, insider points, gift card and credit card payment, split shipments. Tested against 5 real invoices.</div></div></div>
-        <div class="session"><div class="session-num">✓</div><div class="session-main"><div class="session-title">Architecture Document</div><div class="session-desc">All decisions logged, 9-table database schema, 14-agent map, cost basis engine, tax recovery system, onboarding flow, tech stack, data flow diagrams.</div></div></div>
+        <div class="session done"><div class="session-num">✓</div><div class="session-main"><div class="session-title">Development Environment</div><div class="session-desc">Python 3.14, Git, VS Code, Claude Code extension, GitHub repo (theroyalcrate/ResellOS), virtual environment, Supabase project created.</div></div></div>
+        <div class="session done"><div class="session-num">✓</div><div class="session-main"><div class="session-title">Gmail Infrastructure</div><div class="session-desc">Personal Gmail filters forward LEGO invoices and shipping to ResellOS Gmail. ResellOS-Invoices label created and filtering correctly.</div></div></div>
+        <div class="session done"><div class="session-num">✓</div><div class="session-main"><div class="session-title">Agent 1A — LEGO Invoice Parser</div><div class="session-desc">PDF parser working. Handles standard orders, GWP, discount column, insider points, gift card + credit card payment, split shipments. Now captures public set_number AND article_number.</div></div></div>
+        <div class="session done"><div class="session-num">✓</div><div class="session-main"><div class="session-title">Architecture Document</div><div class="session-desc">Original architecture — superseded by v2.0 updated 2026-05-31. All major decisions logged and current.</div></div></div>
       </div>
     </div>
-
-    <div class="milestone">
-      <div class="milestone-icon">✅</div>
-      <div class="milestone-text"><strong>Phase 0 complete.</strong> Full development environment running. Invoice parser proven on real data. Blueprint documented and committed to GitHub.</div>
-    </div>
+    <div class="milestone"><div class="milestone-icon">✅</div><div class="milestone-text"><strong>Phase 0 complete.</strong> Full dev environment running. Invoice parser proven on real data. Supabase live from day one.</div></div>
   </div>
 
   <!-- PHASE 1 -->
   <div class="phase">
-    <div class="phase-header">
+    <div class="phase-header current">
       <div class="phase-num">P1</div>
       <div class="phase-info">
-        <div class="phase-title">Database Foundation + Order Flow</div>
-        <div class="phase-meta">Weeks 1-4 · 10 sessions · 20-30 hours</div>
+        <div class="phase-title">Database Foundation + Full Order Flow + Cost Basis</div>
+        <div class="phase-meta">In progress — S01 through S08+S8.5 complete · S09 next</div>
       </div>
-      <div class="phase-tags"><span class="tag tag-next">Up Next</span></div>
+      <div class="phase-tags"><span class="tag tag-current">In Progress</span></div>
     </div>
 
-    <div class="week">
-      <div class="week-header" onclick="toggleWeek(this)">
+    <div class="week open">
+      <div class="week-header" onclick="this.parentElement.classList.toggle('open')">
         <div class="week-num">Week 1</div>
-        <div class="week-title">Database Creation + Agent 1A Connected</div>
-        <div class="week-sessions">3 sessions · 6-8 hrs</div>
+        <div class="week-title">Database + Agent 1A Connected ✓</div>
+        <div class="week-sessions">S01–S04 complete</div>
         <div class="week-chevron">▾</div>
       </div>
       <div class="week-body">
-        <div class="session">
-          <div class="session-num">S01</div>
-          <div class="session-main">
-            <div class="session-title">setup_database.py — Create all 9 tables in SQLite</div>
-            <div class="session-desc">orders, line_items, inventory, sales, gift_cards, rewards_transactions, cashback_transactions, gwp, tax_recovery. Verify structure. Commit to GitHub.</div>
-          </div>
-          <div class="session-time">60-90 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S02</div>
-          <div class="session-main">
-            <div class="session-title">Connect Agent 1A output to database</div>
-            <div class="session-desc">Instead of printing to console, parsed invoice data writes to orders and line_items tables. Match to pending order by order number.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S03</div>
-          <div class="session-main">
-            <div class="session-title">Verify and debug — run all 5 test invoices</div>
-            <div class="session-desc">Confirm every field lands correctly in the database. Check GWP flags, discount columns, insider points, payment method. Fix anything that breaks.</div>
-          </div>
-          <div class="session-time">60-90 min</div>
-        </div>
+        <div class="session done"><div class="session-num">S01 ✓</div><div class="session-main"><div class="session-title">Database — 21 tables in Supabase</div><div class="session-desc">Migrations 002–020 applied. RLS + user_id on every table. Supabase PostgreSQL — no SQLite.</div></div><div class="session-time">✓ Done</div></div>
+        <div class="session done"><div class="session-num">S02 ✓</div><div class="session-main"><div class="session-title">Connect Agent 1A to database</div><div class="session-desc">Shipments model flaw found — one order can produce multiple invoice PDFs. Shipments table added (migration 003). No data loss.</div></div><div class="session-time">✓ Done</div></div>
+        <div class="session done"><div class="session-num">S03 ✓</div><div class="session-main"><div class="session-title">Agent 02 — Manual order entry</div><div class="session-desc">orders → shipments → line_items. Insider points auto-calculated. 2 real orders in Supabase.</div></div><div class="session-time">✓ Done</div></div>
+        <div class="session done"><div class="session-num">S04 ✓</div><div class="session-main"><div class="session-title">Agent 1A — Shipments model verified</div><div class="session-desc">2 real LEGO invoice PDFs parsed and written to Supabase. SSL fix for Python 3.14. Split payment bug fixed (payment_method = mixed).</div></div><div class="session-time">✓ Done</div></div>
       </div>
     </div>
 
-    <div class="week">
-      <div class="week-header" onclick="toggleWeek(this)">
+    <div class="week open">
+      <div class="week-header" onclick="this.parentElement.classList.toggle('open')">
         <div class="week-num">Week 2</div>
-        <div class="week-title">Gift Cards + Rewards Infrastructure</div>
-        <div class="week-sessions">3 sessions · 6-9 hrs</div>
+        <div class="week-title">Gift Cards + Cashback + Rewards + Cost Basis ✓</div>
+        <div class="week-sessions">S05–S08+S8.5 complete</div>
         <div class="week-chevron">▾</div>
       </div>
       <div class="week-body">
-        <div class="session">
-          <div class="session-num">S04</div>
-          <div class="session-main">
-            <div class="session-title">Gift card ledger</div>
-            <div class="session-desc">Retailer-tabbed UI. Single and bulk entry modes. Face value, price paid, discount %, last 4 digits, date, status. Links to orders when used. Balance tracking.</div>
-          </div>
-          <div class="session-time">60-90 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S05</div>
-          <div class="session-main">
-            <div class="session-title">Rewards pool manager — Agent 6</div>
-            <div class="session-desc">Earn at order level using order-specific rate. Spend tracking draws from pool. Running balance per retailer. LEGO Insider first, then Kohl's, B&N, Macy's.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S06</div>
-          <div class="session-main">
-            <div class="session-title">Rakuten cashback pool — Agent 7</div>
-            <div class="session-desc">Rate set per order (2.5%-15%). Quarterly payout tracking — expected vs actual. Stacks with retailer rewards independently. Allocated when received.</div>
-          </div>
-          <div class="session-time">60-90 min</div>
-        </div>
+        <div class="session done"><div class="session-num">S05 ✓</div><div class="session-main"><div class="session-title">Agent 05 — Gift Card Ledger</div><div class="session-desc">Single + bulk entry modes. Face value, price paid, discount % auto-calculated, last 4, balance tracking. Migration 003 applied.</div></div><div class="session-time">✓ Done</div></div>
+        <div class="session done"><div class="session-num">S06 ✓</div><div class="session-main"><div class="session-title">Agent 02 overhaul — All 7 retailers</div><div class="session-desc">Full reward logic: LEGO, Barnes, Kohl's, Macy's, Walmart Business, Target, Best Buy. Migrations 004–006. Barnes Scrapyard 14 stamps verified.</div></div><div class="session-time">✓ Done</div></div>
+        <div class="session done"><div class="session-num">S07 ✓</div><div class="session-main"><div class="session-title">Agent 07 — Cashback Pool Manager</div><div class="session-desc">6 platforms: Rakuten, RetailMeNot, Capital One Shopping, Microsoft Shopping, Honey, TopCashback + Other. Earn/payout/review modes. Migration 007.</div></div><div class="session-time">✓ Done</div></div>
+        <div class="session done"><div class="session-num">S08 ✓</div><div class="session-main"><div class="session-title">Agent 04 — Cost Basis Engine</div><div class="session-desc">5 layers, 4 costing methods, GWP Philosophy C. Verified on T487170400 ($63.95 net economic cost). 2 CRITICAL + 4 MODERATE issues fixed in code review. Migrations 008–010.</div></div><div class="session-time">✓ Done</div></div>
+        <div class="session done"><div class="session-num">S8.5 ✓</div><div class="session-main"><div class="session-title">buy_reason + purchase_trigger refactor</div><div class="session-desc">Split intent (why) from channel (how). 3 values each, nullable, data cleaned on all 5 live orders. No migration needed.</div></div><div class="session-time">✓ Done</div></div>
       </div>
     </div>
 
-    <div class="week">
-      <div class="week-header" onclick="toggleWeek(this)">
-        <div class="week-num">Week 3</div>
-        <div class="week-title">Manual Order Entry + Order Pipeline</div>
-        <div class="week-sessions">3 sessions · 5-8 hrs</div>
+    <div class="week open">
+      <div class="week-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="week-num">Week 2–3</div>
+        <div class="week-title">Gmail/Drive MCP + Agent 1B + Layer 3 Verification</div>
+        <div class="week-sessions">S09 — Next session</div>
         <div class="week-chevron">▾</div>
       </div>
       <div class="week-body">
-        <div class="session">
-          <div class="session-num">S07</div>
-          <div class="session-main">
-            <div class="session-title">Agent 2 — Manual order entry</div>
-            <div class="session-desc">Three inputs: order number, gift card last 4 (links to gift card ledger), rewards rate (default 5%, adjustable). Creates pending order record. Gift card and rewards fields now have infrastructure to reference.</div>
-          </div>
-          <div class="session-time">60-90 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S08</div>
-          <div class="session-main">
-            <div class="session-title">Agent 3 — Shipping confirmation parser</div>
-            <div class="session-desc">Reads shipping email from Royal Crate ResellOS-Invoices label. Extracts tracking number and carrier only. Matches to existing order by order number. Supports multiple tracking numbers per order for split shipments.</div>
-          </div>
-          <div class="session-time">60-90 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S09</div>
-          <div class="session-main">
-            <div class="session-title">Connect full order flow end to end</div>
-            <div class="session-desc">Manual entry → invoice parsed and matched → tracking added → gift card discount calculated → rewards earned recorded to pool. Test with real order. Verify every step.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
+        <div class="session next-up"><div class="session-num">S09 →</div><div class="session-main"><div class="session-title">Barnes Scrapyard verification + Agent 1B + Gmail/Drive connection</div><div class="session-desc">1) Connect Gmail MCP + Google Drive MCP. 2) Verify cost basis Layer 3 rewards redemption on Barnes Scrapyard order ($52.43 rewards, $21.65 out of pocket). 3) Build agent_1b_invoice_filing.py — download PDFs, rename, file into Drive. 4) S08 minor deferred cleanup. 5) Move test file to /tests.</div></div><div class="session-time">→ Next</div></div>
+        <div class="session"><div class="session-num">S10</div><div class="session-main"><div class="session-title">Email order-confirmation agents — LEGO first</div><div class="session-desc">Per-retailer confirmation parsers. CRITICAL: enrich/match existing orders only — never duplicate line items. Leave buy_reason + purchase_trigger null — agents never guess intent.</div></div><div class="session-time">Planned</div></div>
       </div>
     </div>
 
-    <div class="week">
-      <div class="week-header" onclick="toggleWeek(this)">
-        <div class="week-num">Week 4</div>
-        <div class="week-title">Python Virtual Environment + Phase 1 Verification</div>
-        <div class="week-sessions">1-2 sessions · 2-4 hrs</div>
-        <div class="week-chevron">▾</div>
-      </div>
-      <div class="week-body">
-        <div class="session">
-          <div class="session-num">S10</div>
-          <div class="session-main">
-            <div class="session-title">Create Python virtual environment</div>
-            <div class="session-desc">Libraries currently installed globally. Create venv inside ResellOS folder. Reinstall pdfplumber and other dependencies inside it. Update .gitignore. This isolates ResellOS dependencies correctly for future multi-user deployment.</div>
-          </div>
-          <div class="session-time">30-60 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S11</div>
-          <div class="session-main">
-            <div class="session-title">Phase 1 full verification</div>
-            <div class="session-desc">Run a complete real order through every step. Verify database has correct data. Commit all working code to GitHub. Document anything that needs adjustment before Phase 2.</div>
-          </div>
-          <div class="session-time">60-90 min</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="milestone">
-      <div class="milestone-icon">🎯</div>
-      <div class="milestone-text"><strong>Phase 1 milestone:</strong> Every order you place flows through the system correctly. Gift cards linked. Rewards pool tracking. Cashback pool running. All four cost basis layers have infrastructure. Data lives in SQLite. Code committed to GitHub.</div>
-    </div>
+    <div class="milestone"><div class="milestone-icon">🎯</div><div class="milestone-text"><strong>Phase 1 milestone:</strong> Every order flows through the system. Invoice filed automatically. Cost basis verified across all 5 layers with real orders. Gmail and Drive connected. The buy side is complete.</div></div>
   </div>
 
   <!-- PHASE 2 -->
@@ -654,97 +206,28 @@
     <div class="phase-header">
       <div class="phase-num">P2</div>
       <div class="phase-info">
-        <div class="phase-title">Cost Basis Engine Complete</div>
-        <div class="phase-meta">Weeks 5-7 · 6 sessions · 12-18 hours</div>
+        <div class="phase-title">Product Catalog + Hit List + Inventory</div>
+        <div class="phase-meta">Upcoming — builds the sourcing funnel and unit-level tracking</div>
       </div>
-      <div class="phase-tags"><span class="tag tag-later">Weeks 5-7</span></div>
+      <div class="phase-tags"><span class="tag tag-next">Up Next</span></div>
     </div>
-
     <div class="week">
-      <div class="week-header" onclick="toggleWeek(this)">
-        <div class="week-num">Week 5</div>
-        <div class="week-title">Tax Allocation + GWP Engine</div>
-        <div class="week-sessions">2 sessions · 4-6 hrs</div>
+      <div class="week-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="week-num">Phase 2</div>
+        <div class="week-title">Catalog Agent + Hit List + Inventory Tracker</div>
+        <div class="week-sessions">4–5 sessions estimated</div>
         <div class="week-chevron">▾</div>
       </div>
       <div class="week-body">
-        <div class="session">
-          <div class="session-num">S12</div>
-          <div class="session-main">
-            <div class="session-title">Tax allocation engine — Agent 5</div>
-            <div class="session-desc">Allocates order-level tax proportionally to each paid line item by share of subtotal. GWP items get zero tax allocation. Flags recovery-eligible items based on retailer certificate profile.</div>
-          </div>
-          <div class="session-time">60-90 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S13</div>
-          <div class="session-main">
-            <div class="session-title">GWP allocation engine — Agent 8</div>
-            <div class="session-desc">GWP sets auto-identified from invoice. User enters actual net proceeds when GWP sells. Allocated proportionally across paid sets on originating order. Updates cost basis on affected inventory units.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
+        <div class="session"><div class="session-num">S11</div><div class="session-main"><div class="session-title">Database migrations — product_catalog + hit_list + vertical_config tables</div><div class="session-desc">3 new tables. catalog_id FK column added to line_items. CPA meeting June 10 — cashback toggle activation decision after this meeting.</div></div><div class="session-time">60–90 min</div></div>
+        <div class="session"><div class="session-num">S12</div><div class="session-main"><div class="session-title">Agent 08 — Product Catalog Agent</div><div class="session-desc">Manual entry, CSV upload (flexible column mapper), Bricktap retirement list upload (hardcoded mapper). Auto-create minimal entry on order if product unknown. Edit/update catalog entries — changes never retroactively affect locked cost basis.</div></div><div class="session-time">90–120 min</div></div>
+        <div class="session"><div class="session-num">S13</div><div class="session-main"><div class="session-title">Hit list management — built into Agent 08</div><div class="session-desc">Add/edit/abandon targets. target_price, target_discount_pct, priority levels. Notes field as sourcing decision journal. Abandoned preserves history, never deletes. When order placed matching hit list entry — auto-close to purchased.</div></div><div class="session-time">60–90 min</div></div>
+        <div class="session"><div class="session-num">S14</div><div class="session-main"><div class="session-title">Inventory tracker — unit-level</div><div class="session-desc">One row per physical unit. FIFO date recorded. Location: in_storage | sealed | in_transit | at_fulfillment | sold. true_cost_basis per unit from Agent 04. WFS aging alert at 330 days (60-day warning before 365-day fee tier). New 450+ day tier at $7.50 effective June 30 2026.</div></div><div class="session-time">90–120 min</div></div>
+        <div class="session"><div class="session-num">S15</div><div class="session-main"><div class="session-title">Verify unit-level cost basis — real inventory</div><div class="session-desc">Run real orders through inventory layer. Confirm cost basis per unit matches order-level calculation divided by quantity. Confirm FIFO ordering works correctly across multiple purchases of same set.</div></div><div class="session-time">60–90 min</div></div>
       </div>
     </div>
-
-    <div class="week">
-      <div class="week-header" onclick="toggleWeek(this)">
-        <div class="week-num">Week 6</div>
-        <div class="week-title">Inventory Tracker + Storage</div>
-        <div class="week-sessions">2 sessions · 4-6 hrs</div>
-        <div class="week-chevron">▾</div>
-      </div>
-      <div class="week-body">
-        <div class="session">
-          <div class="session-num">S14</div>
-          <div class="session-main">
-            <div class="session-title">Inventory tracker</div>
-            <div class="session-desc">One unit per physical item in inventory table. FIFO purchase date recorded. Location status — in_storage, sealed, in_transit, at_fulfillment, sold. True cost basis per unit calculated from all four layers.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S15</div>
-          <div class="session-main">
-            <div class="session-title">Physical storage + WFS shipping prep</div>
-            <div class="session-desc">Open and sealed box tracking. Set location awareness — which box, which status. Estimated weight per box from known set weights. Home label printing for WFS shipments. FedEx drop-ready workflow.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="week">
-      <div class="week-header" onclick="toggleWeek(this)">
-        <div class="week-num">Week 7</div>
-        <div class="week-title">Cost Basis Engine — Full Verification</div>
-        <div class="week-sessions">2 sessions · 4-6 hrs</div>
-        <div class="week-chevron">▾</div>
-      </div>
-      <div class="week-body">
-        <div class="session">
-          <div class="session-num">S16</div>
-          <div class="session-main">
-            <div class="session-title">Cost basis engine — Agent 4 — full integration</div>
-            <div class="session-desc">Connects all four layers: gift card discount (immediate), rewards pool (on spend), cashback pool (on receipt), GWP proceeds (on sale). Runs automatically when any layer event completes. Updates true_cost_basis in inventory table.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S17</div>
-          <div class="session-main">
-            <div class="session-title">Full cost basis verification with real orders</div>
-            <div class="session-desc">Run December invoice and May invoices through complete system. Verify true cost basis matches manual calculation. Confirm the sell decision dashboard shows correct ROI. Commit to GitHub.</div>
-          </div>
-          <div class="session-time">60-90 min</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="milestone">
-      <div class="milestone-icon">🎯</div>
-      <div class="milestone-text"><strong>Phase 2 milestone:</strong> Every unit in inventory has a true cost basis reflecting all four discount layers. <strong>Sell decisions change immediately.</strong> You can see what everything actually cost. The ROI showing in your current tracker is wrong — this one is right.</div>
-    </div>
+    <div class="note-box"><strong>Pre-Phase 2 decision needed</strong>Confirm inventory table schema supports unit-level rows (one row per physical unit) before building. Unit-level rows enable Specific Identification costing — harder to retrofit than to design in now. This is the right approach given the cost basis engine already supports it.</div>
+    <div class="milestone"><div class="milestone-icon">🎯</div><div class="milestone-text"><strong>Phase 2 milestone:</strong> Every unit in inventory has its own cost basis. The hit list drives sourcing decisions. The catalog is populated and editable. The business lifecycle from catalog → hit list → order → inventory is fully connected.</div></div>
   </div>
 
   <!-- PHASE 3 -->
@@ -753,101 +236,26 @@
       <div class="phase-num">P3</div>
       <div class="phase-info">
         <div class="phase-title">Sales Import + Tax Recovery</div>
-        <div class="phase-meta">Weeks 8-11 · 8 sessions · 16-24 hours</div>
+        <div class="phase-meta">Closes the loop — first real P&L numbers. Tax recovery report ready to file.</div>
       </div>
-      <div class="phase-tags"><span class="tag tag-later">Weeks 8-11</span></div>
+      <div class="phase-tags"><span class="tag tag-later">Phase 3</span></div>
     </div>
-
     <div class="week">
-      <div class="week-header" onclick="toggleWeek(this)">
-        <div class="week-num">Week 8-9</div>
-        <div class="week-title">Multi-Platform Sales Import</div>
-        <div class="week-sessions">4 sessions · 8-12 hrs</div>
+      <div class="week-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="week-num">Phase 3</div>
+        <div class="week-title">Multi-Platform Sales Import + Tax Recovery Engine</div>
+        <div class="week-sessions">6–8 sessions estimated</div>
         <div class="week-chevron">▾</div>
       </div>
       <div class="week-body">
-        <div class="session">
-          <div class="session-num">S18</div>
-          <div class="session-main">
-            <div class="session-title">Sales importer — Agent 9 — Walmart first</div>
-            <div class="session-desc">CSV export from Walmart WFS. Matches sale to inventory unit by set number + FIFO date. Calculates net proceeds minus true cost basis equals actual profit. Writes to sales table.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S19</div>
-          <div class="session-main">
-            <div class="session-title">Amazon sales import</div>
-            <div class="session-desc">Amazon Seller Central CSV format. Slightly different column structure from Walmart. FBA fees extracted. Same FIFO matching logic.</div>
-          </div>
-          <div class="session-time">60-90 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S20</div>
-          <div class="session-main">
-            <div class="session-title">Bricklink + eBay sales import</div>
-            <div class="session-desc">Both platforms in one session — similar structure. Platform fees, shipping costs extracted. P&L by platform begins to take shape.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S21</div>
-          <div class="session-main">
-            <div class="session-title">Verify true profit across all four platforms</div>
-            <div class="session-desc">Real sales data. Real profit numbers. P&L by set number and by platform. Commit to GitHub. This is the first time you see what you actually made per unit.</div>
-          </div>
-          <div class="session-time">60-90 min</div>
-        </div>
+        <div class="session"><div class="session-num">S16</div><div class="session-main"><div class="session-title">Sales importer — Walmart first (Agent 09)</div><div class="session-desc">CSV from Walmart WFS. Net proceeds = Product Price + Walmart Funded Savings − 8% commission − WFS fulfillment fee. Matches to inventory unit by set number + FIFO date. Writes to sales table.</div></div><div class="session-time">90–120 min</div></div>
+        <div class="session"><div class="session-num">S17</div><div class="session-main"><div class="session-title">Amazon + Bricklink + eBay sales import</div><div class="session-desc">Amazon Seller Central CSV. Bricklink + eBay similar structure. FBA fees and platform fees extracted. FIFO matching logic same across all.</div></div><div class="session-time">90–120 min</div></div>
+        <div class="session"><div class="session-num">S18</div><div class="session-main"><div class="session-title">Verify true profit across all platforms</div><div class="session-desc">Real sales data. Real profit numbers. P&L by set number, by platform, by buy_reason. First time you see what you actually made per unit.</div></div><div class="session-time">60–90 min</div></div>
+        <div class="session"><div class="session-num">S19</div><div class="session-main"><div class="session-title">Tax recovery eligibility engine (CPA consult first)</div><div class="session-desc">Sold unit → purchase tax paid → recovery eligible. WA state rules. Confirm report format with CPA before building. Tax recovery flows as P&L credit — never reopens cost basis.</div></div><div class="session-time">90–120 min</div></div>
+        <div class="session"><div class="session-num">S20</div><div class="session-main"><div class="session-title">Quarterly tax recovery report generator</div><div class="session-desc">All eligible sold units for the quarter. Groups by retailer, set, tax paid, sale date. Formatted for WA state quarterly filing. Status → filed → reimbursed.</div></div><div class="session-time">90–120 min</div></div>
       </div>
     </div>
-
-    <div class="week">
-      <div class="week-header" onclick="toggleWeek(this)">
-        <div class="week-num">Week 10-11</div>
-        <div class="week-title">Tax Recovery System</div>
-        <div class="week-sessions">4 sessions · 8-12 hrs</div>
-        <div class="week-chevron">▾</div>
-      </div>
-      <div class="week-body">
-        <div class="session">
-          <div class="session-num">S22</div>
-          <div class="session-main">
-            <div class="session-title">Tax recovery eligibility engine</div>
-            <div class="session-desc">Connects sold units to purchase tax paid via FIFO. Checks retailer certificate status. Creates tax_recovery record when unit sells and tax was paid. Washington state rules first.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S23</div>
-          <div class="session-main">
-            <div class="session-title">CPA consultation before this session</div>
-            <div class="session-desc">Before building the report format, confirm with CPA: how does WA state want the filing structured? What documentation is required? What period lookback is allowed? Build the report to match the answer.</div>
-          </div>
-          <div class="session-time">External dependency</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S24</div>
-          <div class="session-main">
-            <div class="session-title">Quarterly report generator — Agent 10</div>
-            <div class="session-desc">Reads all eligible sold units for the quarter. Groups by purchase date, retailer, set, tax paid, sale date. Formats for WA state quarterly filing. Exports PDF/CSV. Status → filed.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S25</div>
-          <div class="session-main">
-            <div class="session-title">Test with real historical data</div>
-            <div class="session-desc">Run actual sold inventory through the recovery engine. Generate first real report. Verify recovery amounts against manual estimates. This is the first dollar recovered.</div>
-          </div>
-          <div class="session-time">60-90 min</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="milestone">
-      <div class="milestone-icon">🎯</div>
-      <div class="milestone-text"><strong>Phase 3 milestone:</strong> The loop is closed. <strong>Bought here → cost this → sold here → made this.</strong> Tax recovery report ready to file. First real reimbursement from WA state incoming. ResellOS is now running your live business.</div>
-    </div>
+    <div class="milestone"><div class="milestone-icon">🎯</div><div class="milestone-text"><strong>Phase 3 milestone:</strong> <strong>Bought here → cost this → sold here → made this.</strong> Tax recovery report ready to file. First real reimbursement from WA state incoming. ResellOS is running the live business end to end.</div></div>
   </div>
 
   <!-- PHASE 4 -->
@@ -855,59 +263,26 @@
     <div class="phase-header">
       <div class="phase-num">P4</div>
       <div class="phase-info">
-        <div class="phase-title">Output Layer — Sheets + Dashboard</div>
-        <div class="phase-meta">Weeks 12-13 · 4 sessions · 8-12 hours</div>
+        <div class="phase-title">Output Layer — Reporting + Purchase Planner</div>
+        <div class="phase-meta">Human-readable views, bookkeeper output, and forward-looking buying intelligence</div>
       </div>
-      <div class="phase-tags"><span class="tag tag-later">Weeks 12-13</span></div>
+      <div class="phase-tags"><span class="tag tag-later">Phase 4</span></div>
     </div>
-
     <div class="week">
-      <div class="week-header" onclick="toggleWeek(this)">
-        <div class="week-num">Week 12-13</div>
-        <div class="week-title">Google Sheets Sync + Performance Dashboard</div>
-        <div class="week-sessions">4 sessions · 8-12 hrs</div>
+      <div class="week-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="week-num">Phase 4</div>
+        <div class="week-title">Google Sheets Sync + Performance Dashboard + Purchase Planner</div>
+        <div class="week-sessions">4–6 sessions estimated</div>
         <div class="week-chevron">▾</div>
       </div>
       <div class="week-body">
-        <div class="session">
-          <div class="session-num">S26</div>
-          <div class="session-main">
-            <div class="session-title">Google Sheets MCP setup</div>
-            <div class="session-desc">Connect Royal Crate Gmail Google account to Sheets MCP. Authorize access. Create ResellOS master spreadsheet with correct tab structure: Dashboard, Orders, Inventory, Sales, GWP Tracker, Reports, Performance.</div>
-          </div>
-          <div class="session-time">60-90 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S27</div>
-          <div class="session-main">
-            <div class="session-title">Agent 11 — Sheets sync</div>
-            <div class="session-desc">Reads from SQLite, writes human-readable views to each Sheets tab. On-demand sync — not automatic. Sheets is read-only window. Bookkeeper and CPA facing.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S28</div>
-          <div class="session-main">
-            <div class="session-title">Reports tab — tax period exports</div>
-            <div class="session-desc">COGS, fees, net profit by period. Formatted for CPA. Aligns with QuickBooks entries. No reconciliation surprises. Your bookkeeper gets what they need without touching the database.</div>
-          </div>
-          <div class="session-time">60-90 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S29</div>
-          <div class="session-main">
-            <div class="session-title">Performance dashboard — Agent 12</div>
-            <div class="session-desc">ROI by set number. ROI by retailer. ROI by platform. Best performing GWPs. Rewards pool efficiency. Capital deployment signals — where to put money next based on historical performance.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
+        <div class="session"><div class="session-num">S21</div><div class="session-main"><div class="session-title">Google Sheets MCP + Agent 11 — Sheets sync</div><div class="session-desc">Reads from Supabase, writes human-readable views to Sheets tabs. On-demand sync — not automatic. Sheets is read-only window. Bookkeeper and CPA facing. Tabs: Dashboard, Orders, Inventory, Sales, GWP Tracker, Reports, Performance.</div></div><div class="session-time">90–120 min</div></div>
+        <div class="session"><div class="session-num">S22</div><div class="session-main"><div class="session-title">Reports tab — COGS + tax period exports</div><div class="session-desc">COGS, fees, net profit by period. Formatted for CPA. Aligns with QuickBooks entries. Tax recovery summary.</div></div><div class="session-time">60–90 min</div></div>
+        <div class="session"><div class="session-num">S23</div><div class="session-main"><div class="session-title">Performance dashboard — Agent 12</div><div class="session-desc">ROI by set number, retailer, platform, buy_reason (planned vs opportunistic vs promo_expiration). Rewards pool efficiency. Sell-through velocity. Seasonal patterns emerge here after 6+ months of data.</div></div><div class="session-time">90–120 min</div></div>
+        <div class="session"><div class="session-num">S24</div><div class="session-main"><div class="session-title">Purchase Planner — Agent 13 (Phase 2 feature)</div><div class="session-desc">Consumes hit list as input queue. User selects retailer + budget. Agent calculates optimal buying combination — hit GWP threshold with minimum overspend, maximize rewards. Output feeds directly into Agent 02. No double entry. Order stays in plan mode until user enters order number + gift card details.</div></div><div class="session-time">120–180 min</div></div>
       </div>
     </div>
-
-    <div class="milestone">
-      <div class="milestone-icon">🎯</div>
-      <div class="milestone-text"><strong>Phase 4 milestone:</strong> Clean human-readable view of the entire business. Bookkeeper has what they need. You have what you need to make better buying decisions. The performance dashboard tells you where to put capital next.</div>
-    </div>
+    <div class="milestone"><div class="milestone-icon">🎯</div><div class="milestone-text"><strong>Phase 4 milestone:</strong> Clean human-readable output for bookkeeper and CPA. Purchase Planner connected to hit list — buying decisions are data-driven. The system tells you where to put capital next.</div></div>
   </div>
 
   <!-- PHASE 5 -->
@@ -915,59 +290,26 @@
     <div class="phase-header">
       <div class="phase-num">P5</div>
       <div class="phase-info">
-        <div class="phase-title">Polish, Onboarding + Historical Data</div>
-        <div class="phase-meta">Weeks 14-15 · 4 sessions · 8-12 hours</div>
+        <div class="phase-title">Polish + Onboarding + Historical Data</div>
+        <div class="phase-meta">Prepare for first users. Prove the onboarding flow. Backfill 15 months of history.</div>
       </div>
-      <div class="phase-tags"><span class="tag tag-later">Weeks 14-15</span></div>
+      <div class="phase-tags"><span class="tag tag-later">Phase 5</span></div>
     </div>
-
     <div class="week">
-      <div class="week-header" onclick="toggleWeek(this)">
-        <div class="week-num">Week 14-15</div>
-        <div class="week-title">Onboarding + Retailer Expansion + Historical Migration</div>
-        <div class="week-sessions">4 sessions · 8-12 hrs</div>
+      <div class="week-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="week-num">Phase 5</div>
+        <div class="week-title">Onboarding Flow + Vertical Config + Historical Migration</div>
+        <div class="week-sessions">4–5 sessions estimated</div>
         <div class="week-chevron">▾</div>
       </div>
       <div class="week-body">
-        <div class="session">
-          <div class="session-num">S30</div>
-          <div class="session-main">
-            <div class="session-title">Onboarding flow</div>
-            <div class="session-desc">Seven configuration questions at first login: state, costing method, tax treatment, reseller certificate (number + expiry + retailers), retailer default rates, Gmail connection, Sheets connection. Drives all agent behavior.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S31</div>
-          <div class="session-main">
-            <div class="session-title">Retailer profile expansion</div>
-            <div class="session-desc">Walmart, Kohl's, Barnes & Noble, Macy's parser templates. Each retailer gets invoice/receipt format defined. Certificate acceptance status. Rewards program configuration. In-store receipt flagging.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S32</div>
-          <div class="session-main">
-            <div class="session-title">Historical data migration</div>
-            <div class="session-desc">15 months of orders from existing tracker need to come into ResellOS for accurate lifetime reporting. Plan the migration approach, import what's possible, flag what needs manual entry. Critical before community launch.</div>
-          </div>
-          <div class="session-time">120-180 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S33</div>
-          <div class="session-main">
-            <div class="session-title">Reseller certificate expiry reminder + error handling</div>
-            <div class="session-desc">Alert when certificate approaching renewal. Exceptions queue — out of stock flags, partial orders, unmatched invoices surfaced for review. End to end test of full business cycle. Fix everything that breaks.</div>
-          </div>
-          <div class="session-time">90-120 min</div>
-        </div>
+        <div class="session"><div class="session-num">S25</div><div class="session-main"><div class="session-title">Onboarding flow — vertical-first, order-first</div><div class="session-desc">3 questions: what are you selling (vertical select), where do you source (retailer checklist), financial setup (state, costing method, tax treatment, cert). vertical_config loads labels/defaults. No catalog pre-load required. First order auto-creates catalog entry.</div></div><div class="session-time">90–120 min</div></div>
+        <div class="session"><div class="session-num">S26</div><div class="session-main"><div class="session-title">Historical data migration</div><div class="session-desc">15 months of orders from existing tracker into ResellOS. Drive migration prerequisite. Plan import approach, import what's possible, flag what needs manual entry. Critical before community launch.</div></div><div class="session-time">120–180 min</div></div>
+        <div class="session"><div class="session-num">S27</div><div class="session-main"><div class="session-title">Error handling + alerts + certificate expiry</div><div class="session-desc">Reseller certificate expiry reminder. WFS aging alerts (330-day = 60-day warning, 365-day = threshold). Exceptions queue — unmatched invoices, partial orders surfaced for review. End-to-end test of full business cycle.</div></div><div class="session-time">90–120 min</div></div>
+        <div class="session"><div class="session-num">S28</div><div class="session-main"><div class="session-title">UI design brief — screenshot + annotate research</div><div class="session-desc">Capture screenshots of current reselling software using Claude in Chrome. Annotate pain points and things done well. Key pain points known: order editing requires deletion, gift card popup UX. Design direction: high-end, dark, polished, purposeful color for status. UI enforces buy_reason/purchase_trigger values via dropdowns.</div></div><div class="session-time">60–90 min</div></div>
       </div>
     </div>
-
-    <div class="milestone">
-      <div class="milestone-icon">🎯</div>
-      <div class="milestone-text"><strong>Phase 5 milestone:</strong> ResellOS is stable, tested, handles edge cases, and has been running on your live business for 4-6 weeks. You trust the numbers. Historical data is in. You're ready to show someone else how to use it.</div>
-    </div>
+    <div class="milestone"><div class="milestone-icon">🎯</div><div class="milestone-text"><strong>Phase 5 milestone:</strong> ResellOS is stable, tested, handles edge cases, and has been running your live business for 4–6 weeks. You trust the numbers. Historical data is in. You're ready to show someone else how to use it.</div></div>
   </div>
 
   <!-- PHASE 6 -->
@@ -976,184 +318,54 @@
       <div class="phase-num">P6</div>
       <div class="phase-info">
         <div class="phase-title">Community Launch</div>
-        <div class="phase-meta">Weeks 16-20 · 8-10 sessions · 20-30 hours</div>
+        <div class="phase-meta">Multi-user architecture already built (Supabase RLS + user_id from day one). No SQLite migration required.</div>
       </div>
-      <div class="phase-tags"><span class="tag tag-later">Weeks 16-20</span></div>
+      <div class="phase-tags"><span class="tag tag-later">Phase 6</span></div>
     </div>
-
     <div class="week">
-      <div class="week-header" onclick="toggleWeek(this)">
-        <div class="week-num">Week 16-18</div>
-        <div class="week-title">Multi-User Architecture + Documentation</div>
-        <div class="week-sessions">5 sessions · 12-18 hrs</div>
+      <div class="week-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="week-num">Phase 6</div>
+        <div class="week-title">Documentation + Beta Testing + Launch</div>
+        <div class="week-sessions">6–8 sessions estimated</div>
         <div class="week-chevron">▾</div>
       </div>
       <div class="week-body">
-        <div class="session">
-          <div class="session-num">S34-35</div>
-          <div class="session-main">
-            <div class="session-title">SQLite → PostgreSQL migration</div>
-            <div class="session-desc">Move from local SQLite to PostgreSQL for multi-user support. Each user gets isolated data. Agents barely change — the database connection string changes. This is the most technically complex step in Phase 6.</div>
-          </div>
-          <div class="session-time">180-240 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S36-37</div>
-          <div class="session-main">
-            <div class="session-title">Documentation + setup guide</div>
-            <div class="session-desc">Every agent explained in plain language. Step by step setup guide a non-developer can follow. Video walkthrough of onboarding. This is the curriculum founding members receive.</div>
-          </div>
-          <div class="session-time">120-180 min</div>
-        </div>
+        <div class="session"><div class="session-num">S29–30</div><div class="session-main"><div class="session-title">User documentation + setup guide</div><div class="session-desc">Written onboarding guide. Video walkthrough concept. Troubleshooting FAQ. Setup guide for Gmail forwarding rules, reseller certificate entry, gift card bulk import. Covers LEGO vertical first — generalizes from there.</div></div><div class="session-time">180–240 min</div></div>
+        <div class="session"><div class="session-num">S31</div><div class="session-main"><div class="session-title">Beta test with 1–2 trusted community members</div><div class="session-desc">Walk a real reseller through onboarding. Document every point of friction. Fix what breaks. Their data is real — treat with care. Confirm the vertical-specific experience works (they should feel it's built for them).</div></div><div class="session-time">External dependency</div></div>
+        <div class="session"><div class="session-num">S32</div><div class="session-main"><div class="session-title">Tier structure + feature gating</div><div class="session-desc">Define basic vs upgraded user experience. buy_reason/purchase_trigger visible to upgraded users only. Premium features: Specific Identification costing, advanced reporting. Basic tier: all core tracking + cost basis + tax recovery.</div></div><div class="session-time">60–90 min</div></div>
+        <div class="session"><div class="session-num">S33</div><div class="session-main"><div class="session-title">Community launch</div><div class="session-desc">First community members onboarded. Support workflow defined. Session Log becomes changelog. Architecture doc becomes product documentation.</div></div><div class="session-time">Milestone</div></div>
       </div>
     </div>
-
-    <div class="week">
-      <div class="week-header" onclick="toggleWeek(this)">
-        <div class="week-num">Week 19-20</div>
-        <div class="week-title">Pricing, Community Setup + Soft Launch</div>
-        <div class="week-sessions">3-5 sessions · 8-12 hrs</div>
-        <div class="week-chevron">▾</div>
-      </div>
-      <div class="week-body">
-        <div class="session">
-          <div class="session-num">S38</div>
-          <div class="session-main">
-            <div class="session-title">Pricing and access tiers</div>
-            <div class="session-desc">Basic OS access vs full system including tax recovery vs Keepa add-on (when built). Founding member pricing — lower cost, high touch, real feedback in exchange for early access.</div>
-          </div>
-          <div class="session-time">Strategy session — no code</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S39</div>
-          <div class="session-main">
-            <div class="session-title">Skool or Discord community setup</div>
-            <div class="session-desc">Channels by vertical — LEGO, toys, cards, sneakers. Founding member onboarding flow. Deal flow channel. Tax recovery thread. Community rules and culture established from day one.</div>
-          </div>
-          <div class="session-time">120-180 min</div>
-        </div>
-        <div class="session">
-          <div class="session-num">S40</div>
-          <div class="session-main">
-            <div class="session-title">Soft launch — founding members</div>
-            <div class="session-desc">High touch. Real feedback. Fix what breaks. The headline: ResellOS recovered $X in sales tax for WA state resellers in Q1. That number is the marketing. Let it do the work.</div>
-          </div>
-          <div class="session-time">Ongoing</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="milestone">
-      <div class="milestone-icon">🚀</div>
-      <div class="milestone-text"><strong>Phase 6 milestone:</strong> First paying community members using ResellOS. Tax recovery report generating real reimbursements. Social media content documenting the journey. The OS is funding itself.</div>
-    </div>
+    <div class="note-box"><strong>Multi-user advantage</strong>Because Supabase with RLS was the database from day one, there is no SQLite-to-PostgreSQL migration required at community launch. This was the right call made before S01. Every community member gets their own isolated data automatically.</div>
+    <div class="milestone"><div class="milestone-icon">🚀</div><div class="milestone-text"><strong>Phase 6 milestone:</strong> First paying community members using ResellOS to track their real LEGO reselling business. The system that saved your time is saving theirs.</div></div>
   </div>
 
   <!-- PHASE 7 -->
   <div class="phase">
-    <div class="phase-header future">
+    <div class="phase-header">
       <div class="phase-num">P7</div>
       <div class="phase-info">
-        <div class="phase-title">Build 2 — Keepa Intelligence Layer</div>
-        <div class="phase-meta">Weeks 21-28 · Funded by community revenue · Premium add-on</div>
+        <div class="phase-title">Keepa Build 2 + Intelligence Layer + Multi-Vertical Expansion</div>
+        <div class="phase-meta">Post-launch premium add-ons and vertical expansion. OS core functions fully without these.</div>
       </div>
-      <div class="phase-tags"><span class="tag tag-premium">Premium</span><span class="tag tag-later">Weeks 21-28</span></div>
+      <div class="phase-tags"><span class="tag tag-later">Post-launch</span></div>
     </div>
-
     <div class="week">
-      <div class="week-header" onclick="toggleWeek(this)">
-        <div class="week-num">Week 21-28</div>
-        <div class="week-title">Keepa Intelligence — Standalone Build</div>
-        <div class="week-sessions">8-10 sessions</div>
+      <div class="week-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="week-num">Phase 7</div>
+        <div class="week-title">Premium Layer + New Verticals</div>
+        <div class="week-sessions">Scope TBD based on community demand</div>
         <div class="week-chevron">▾</div>
       </div>
       <div class="week-body">
-        <div class="session">
-          <div class="session-num">—</div>
-          <div class="session-main">
-            <div class="session-title">Keepa API access and rate limit management</div>
-            <div class="session-desc">Risk: single point of failure. API terms can change. Build with fallback in mind.</div>
-          </div>
-          <div class="session-time">TBD</div>
-        </div>
-        <div class="session">
-          <div class="session-num">—</div>
-          <div class="session-main">
-            <div class="session-title">Watchlist scanning + demand/supply signals</div>
-            <div class="session-desc">Units sold per month with Q4 multiplier. Active seller count. Amazon presence flag. Buy/watch/pass signal.</div>
-          </div>
-          <div class="session-time">TBD</div>
-        </div>
-        <div class="session">
-          <div class="session-num">—</div>
-          <div class="session-main">
-            <div class="session-title">Buy grader + Chrome extension</div>
-            <div class="session-desc">Integrated with cost basis engine. If sourced at X, at current discount rates, true ROI is Y. Chrome extension overlays signal while browsing.</div>
-          </div>
-          <div class="session-time">TBD</div>
-        </div>
-        <div class="session">
-          <div class="session-num">—</div>
-          <div class="session-main">
-            <div class="session-title">Community pricing</div>
-            <div class="session-desc">Lower cost for OS members vs standalone. Natural upgrade path. Community member who joins for OS discovers Keepa layer. One tap to upgrade.</div>
-          </div>
-          <div class="session-time">TBD</div>
-        </div>
+        <div class="session"><div class="session-num">7A</div><div class="session-main"><div class="session-title">Keepa Intelligence — Build 2 (standalone premium add-on)</div><div class="session-desc">API dependency — intentionally isolated from OS core. Price history, sell-through velocity, market floor pricing. LEGO-specific. Keepa has no exportable format — API dependency is a single point of failure. Premium community add-on, not core OS.</div></div><div class="session-time">TBD</div></div>
+        <div class="session"><div class="session-num">7B</div><div class="session-main"><div class="session-title">Intelligence layer — pattern recognition + alerts</div><div class="session-desc">Requires 6–12 months of tagged data. Stamp expiry alerts, cashback payout timing, seasonal sourcing signals. buy_reason + purchase_trigger tagging built now powers ROI-by-intent analysis here. Cross-vertical patterns visible (LEGO ROI vs wholesale ROI vs OA ROI).</div></div><div class="session-time">TBD</div></div>
+        <div class="session"><div class="session-num">7C</div><div class="session-main"><div class="session-title">Additional vertical expansion (Pokemon / Wholesale / General OA)</div><div class="session-desc">product_catalog table already supports any vertical. vertical_config table drives UI labels and defaults. New vertical = new retailer profiles + new catalog identifier type + new enrichment source. No schema rebuild required.</div></div><div class="session-time">TBD</div></div>
       </div>
     </div>
-
-    <div class="milestone">
-      <div class="milestone-icon">🎯</div>
-      <div class="milestone-text"><strong>Phase 7 milestone:</strong> The intelligence layer is live. The OS tells you what to buy, tracks what it costs, and reports what you made. Full cycle automated. Community members upgrading. Second revenue stream active.</div>
-    </div>
-  </div>
-
-  <!-- Risks -->
-  <div class="risks">
-    <div class="risks-title">// Known Risks and Mitigations</div>
-    <div class="risk-item">
-      <div class="risk-label">Keepa API</div>
-      <div class="risk-desc"><strong>Single point of failure.</strong> API terms can change, Amazon can pressure Keepa. OS functions fully without it. Build 2 treated as separate product, not core dependency.</div>
-    </div>
-    <div class="risk-item">
-      <div class="risk-label">Tax treatment</div>
-      <div class="risk-desc"><strong>CPA conversation required before Phase 3.</strong> How GWP, rewards, and cashback are treated for tax has real implications. Build the reporting to match CPA guidance, not assumptions.</div>
-    </div>
-    <div class="risk-item">
-      <div class="risk-label">Email parsing</div>
-      <div class="risk-desc"><strong>Retailer email templates change without notice.</strong> Parser flags uncertainty rather than guessing. Wrong data in cost basis engine is worse than no data.</div>
-    </div>
-    <div class="risk-item">
-      <div class="risk-label">Scope creep</div>
-      <div class="risk-desc"><strong>The map is larger than what's built.</strong> One session, one agent. Complete and verify before starting the next. Understanding over speed.</div>
-    </div>
-    <div class="risk-item">
-      <div class="risk-label">Historical data</div>
-      <div class="risk-desc"><strong>15 months of orders exist outside the system.</strong> Migration planned for Phase 5. Don't try to migrate before the system is proven stable.</div>
-    </div>
-    <div class="risk-item">
-      <div class="risk-label">PostgreSQL migration</div>
-      <div class="risk-desc"><strong>Most complex step in Phase 6.</strong> Budget extra time. SQLite and PostgreSQL are similar enough that agents barely change — but the migration itself needs careful testing.</div>
-    </div>
-    <div class="risk-item">
-      <div class="risk-label">Cert expiry</div>
-      <div class="risk-desc"><strong>Reseller certificate has an expiry date.</strong> System alerts on approach. Lapsed certificate means tax recovery stops accruing. High priority reminder built into Phase 5.</div>
-    </div>
-  </div>
-
-  <div class="footer">
-    <div class="footer-name">ResellOS — Project Map v1.1</div>
-    <div class="footer-meta">Updated: Week order corrected — gift card + rewards infrastructure before manual order entry</div>
+    <div class="milestone"><div class="milestone-icon">🎯</div><div class="milestone-text"><strong>Phase 7:</strong> ResellOS is a multi-vertical reselling intelligence platform. LEGO is the flagship vertical. Pokemon, wholesale, and general OA follow the same infrastructure. The intelligence layer turns data into buying decisions.</div></div>
   </div>
 
 </div>
-
-<script>
-  function toggleWeek(header) {
-    const week = header.parentElement;
-    week.classList.toggle('open');
-  }
-</script>
 </body>
 </html>

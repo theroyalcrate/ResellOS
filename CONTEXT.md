@@ -1,5 +1,5 @@
 # ResellOS — Claude Context Document
-**Last Updated: 2026-05-30**
+**Last Updated: 2026-05-31**
 **Read this first. This document orients Claude at the start of every conversation.**
 
 > **Document home & sync rule:** The source-of-truth copy lives in the GitHub repo (`theroyalcrate/ResellOS`), edited via Claude Code. An identical copy lives in the Claude project here so chat-Claude starts every conversation current. **When this doc changes: update the repo copy via Claude Code first, then paste the same content into the project copy.** Keep them identical — drift between the two causes re-walking already-completed work.
@@ -28,7 +28,7 @@ Core transactions, cost basis, inventory, and sales always live in the user's ow
 
 ## Current Tech Stack
 
-- **Database:** Supabase (PostgreSQL) — cloud-hosted, RLS enabled, user_id on every table. Live from day one. There is no SQLite. The architecture doc references SQLite but that decision was reversed before S01. Supabase is permanent.
+- **Database:** Supabase (PostgreSQL) — cloud-hosted, RLS enabled, user_id on every table. Live from day one. There is no SQLite. The architecture doc has been updated to v2.0 and no longer references SQLite.
 - **Language:** Python 3.14 with virtual environment
 - **Version control:** GitHub — repo: theroyalcrate/ResellOS
 - **Development environment:** VS Code + Claude Code extension
@@ -38,7 +38,7 @@ Core transactions, cost basis, inventory, and sales always live in the user's ow
 
 ## Build State — Where We Are Right Now
 
-**Sessions S01 through S08 are complete and committed to GitHub. S8.5 (field refactor) done 2026-05-30.**
+**Sessions S01 through S08 are complete and committed to GitHub. S8.5 (field refactor) done 2026-05-30. Architecture and Project Map documents updated to v2.0 on 2026-05-31.**
 
 | Session | What Was Built | Status |
 |---------|---------------|--------|
@@ -85,7 +85,7 @@ Five layers calculated in order:
 
 **Verification confirmed:** Order T487170400 — $150.98 economic cost, $87.03 GWP proceeds, $63.95 net → Moana's Flowerpot $16.83/unit, Wednesday and Enid $5.05, The Armory $8.41. All exact. ✓
 
-**Minor deferred items (future cleanup sprint):**
+**Minor deferred items (cleanup sprint in S09):**
 - tax_paid_allocated always writes 0 — needs real allocation logic
 - Mode 3 settle never writes gwp.settlement_date
 - Dead elif branch in collect_gwp_proceeds
@@ -126,16 +126,13 @@ All 7 retailers have full reward profiles built in Agent 02:
 ### Purchase trigger — channel (how the deal was found). Separate field, separate axis.
 
 - **Type:** nullable text, no DB constraint. Default null. Three values: `community_alert`, `deal_software_alert`, `self_discovered`.
-- Dropped from the old six-value list: `planned`/`planned_seasonal` (intent → now `buy_reason`), `cashback_opportunity` (deal mechanic → cashback table).
 
-**Why two fields:** intent (why) and channel (how I found it) are different questions; one text field can only cleanly answer one. Kept as two single-purpose fields so each is unambiguous to fill and trustworthy to query.
+**Why two fields:** intent (why) and channel (how I found it) are different questions. Kept as two single-purpose fields so each is unambiguous to fill and trustworthy to query.
 
-**Surfacing (both fields, same rules):** null by default; hidden from basic users entirely (zero friction, core never depends on them); surfaced for upgraded users with manual override. When a hit list exists (future opt-in enrichment), a hit-list match auto-sets `buy_reason = planned`. The hit list is NOT a core dependency — design for it, build later.
-
-**Validation gap (known, deliberate):** values are enforced only by the Agent 02 prompts, not the DB. No check constraint while value sets settle. UI dropdowns will enforce values at source. Revisit when email agents write these fields programmatically.
+**Surfacing (both fields, same rules):** null by default; hidden from basic users entirely; surfaced for upgraded users with manual override. When a hit list exists (future), a hit-list match auto-sets `buy_reason = planned`. The hit list is NOT a core dependency — design for it, build later.
 
 ### Retirement flag
-`is_retiring` (line-item level) defaults TRUE on every line item. User only toggles if they know a set is NOT retiring. No extra prompts — friction kills consistency. This is a **different axis** from buy_reason: a fact about the *set*, not the purchase *intent*. The two no longer need to agree.
+`is_retiring` (line-item level) defaults TRUE on every line item. User only toggles if they know a set is NOT retiring. No extra prompts — friction kills consistency. This is a **different axis** from buy_reason: a fact about the *set*, not the purchase *intent*.
 
 ### FIFO costing method
 Selected (Decision 002). Must confirm with CPA before year-end. Do not change after real data accumulates — retrofitting requires recalculating every true_cost_basis ever written.
@@ -154,10 +151,36 @@ Rewards earned are recorded in the pool — no cost basis impact. Rewards redeem
 
 ---
 
+## Multi-Vertical Architecture — Decided 2026-05-31
+
+ResellOS is designed to expand beyond LEGO to other reselling verticals (Pokemon/TCG, wholesale, general online arbitrage) without rebuilding the transaction layer. All architecture decisions made to support this:
+
+**One product_catalog table, all verticals.** A `vertical` field (lego | pokemon | wholesale | book | general) plus `identifier_type` (set_number | sku | upc | asin | isbn) normalizes product identity across categories. LEGO-specific fields (set_number, article_number, is_retiring) remain on line_items as legacy and continue working. A new `catalog_id` FK on line_items bridges to the catalog.
+
+**vertical_config table** stores per-vertical display labels, identifier labels, discontinuation label ("Retiring" vs "Rotating Out" vs "Discontinued"), and enrichment source defaults. UI reads this to show each user a purpose-built experience for their vertical.
+
+**discontinuation_date on product_catalog** generalizes `is_retiring` — applicable to any vertical. `is_retiring` stays on line_items as a LEGO-specific fast-lookup operational flag (defaults TRUE).
+
+**Hit list as a status layer on product_catalog.** Not a separate system. A product moves: catalog entry → hit list (active) → purchased → inventory → sold. Hit list status values: active | purchased | abandoned. Abandoned preserves history, never deletes. Notes field becomes a sourcing decision journal that feeds the intelligence layer. Purchase Planner (Phase 2) consumes hit list as its input queue.
+
+**Order-first onboarding.** New users are not required to pre-load a catalog before entering their first order. When a line item references an unknown product, a minimal catalog entry is created automatically. Catalog import (manual, CSV, Bricktap format) is available immediately but never required.
+
+**Three catalog input methods:**
+1. Auto-create on first order (no friction)
+2. Manual single entry (daily use — add a set in 60 seconds)
+3. CSV upload with flexible column mapper (bulk import, migration)
+4. Bricktap retirement list upload (hardcoded mapper for the trusted community format)
+
+**Catalog edits never retroactively affect locked cost basis records.** Edits update reference data only.
+
+**Full business lifecycle:** product_catalog → hit_list → orders/line_items → inventory → sales → tax recovery → intelligence layer. Every vertical flows through the same pipeline with the same cost basis engine.
+
+---
+
 ## Known Edge Cases Already Designed For
 
 **Partial order cancellations with GWP retention (A-003):**
-Occurred 15-20 times in Q4 2025 — a predictable seasonal pattern, not an edge case. LEGO cancels sets but honors GWP from original qualifying order value. Manual adjustment workflow available to ANY tier user at ANY time — no automation dependency. LEGO email infrastructure was unreliable in December — cannot depend on automated detection. Cliff edge warnings for Kohl's and Walmart Business when cancellation crosses threshold.
+Occurred 15-20 times in Q4 2025 — a predictable seasonal pattern, not an edge case. LEGO cancels sets but honors GWP from original qualifying order value. Manual adjustment workflow available to ANY tier user at ANY time — no automation dependency. Cliff edge warnings for Kohl's and Walmart Business when cancellation crosses threshold.
 
 **Retailer-specific cancellation behavior:**
 - LEGO — GWP may still ship despite cancellation. Unique favorable mechanic.
@@ -170,13 +193,13 @@ Occurred 15-20 times in Q4 2025 — a predictable seasonal pattern, not an edge 
 **Order status framework for pickup orders (A-004):**
 `supports_pickup = true`: Walmart, Target, Kohl's, Barnes, Macy's, Best Buy.
 `supports_pickup = false`: LEGO always.
-Pickup orders sit in `placed` status until user marks picked up. Cost basis calculates only after pickup confirmed. Walmart digital receipts arrive via email (Walmart Pay). Paper receipts are edge cases. Phase 2 build.
+Pickup orders sit in `placed` status until user marks picked up. Cost basis calculates only after pickup confirmed.
 
 **GWP return handling (A-005):**
-Cost basis locks at settlement. Returns after settlement create P&L adjustment entries — never reopen cost basis. Returned GWP re-enters inventory at $0 cost basis plus return processing costs. GWP cohort averaging: all units of same set number received as GWP within a rolling 90-day period share averaged proceeds allocation.
+Cost basis locks at settlement. Returns after settlement create P&L adjustment entries — never reopen cost basis.
 
 **Storage cost allocation (A-006):**
-Physical storage unit ($208/month, ~2,500 sets) is a real accumulating cost. Monthly snapshots capture per-unit carrying cost rate. Extended cost basis = true_cost_basis + accumulated_carrying_cost. These are always kept as separate fields. WFS storage fees (~$0.10/month) are negligible and captured in Walmart payment reports — do not route through this system.
+Monthly snapshots capture per-unit carrying cost rate. Extended cost basis = true_cost_basis + accumulated_carrying_cost. Always kept as separate fields.
 
 **Walmart Business rewards calculation:**
 2% likely calculated on original order value at placement, not final pickup/invoiced total. One real order: $290 placed, $204 final pickup, $8.40 rewards credited. Needs confirmation.
@@ -185,56 +208,41 @@ Physical storage unit ($208/month, ~2,500 sets) is a real accumulating cost. Mon
 
 **Split shipments:** One LEGO order can produce multiple invoice PDFs. Shipments table handles correctly.
 
-**Duplicate line items (data hygiene, open):** Some early orders have a set represented twice — once from the parser (article_number, set_number) and once from manual Agent 02 entry. This is a cross-path historical artifact, NOT an ongoing bug. No cross-path idempotency guard exists yet. Must be cleaned before further cost-basis work, and email agents must be designed to enrich existing orders rather than duplicate line items.
+**Duplicate line items (data hygiene, open):** Some early orders have a set represented twice — once from the parser and once from manual Agent 02 entry. Cross-path historical artifact, NOT an ongoing bug. Must be cleaned before further cost-basis work. Email agents must enrich existing orders, never duplicate line items.
 
 ---
 
 ## Planned Future Systems (Not Yet Built)
 
 **S09 — Barnes Scrapyard Verification + Agent 1B**
-Verify cost basis engine Layer 3 (rewards redemption) against Barnes Scrapyard order ($52.43 rewards redemption, $21.65 out of pocket). Then connect Gmail + Google Drive, build Agent 1B to download, rename, and file invoices.
+Verify cost basis engine Layer 3 (rewards redemption) against Barnes Scrapyard order ($52.43 rewards redemption, $21.65 out of pocket). Then connect Gmail + Google Drive MCPs, build Agent 1B to download, rename, and file invoices into Drive folder structure.
 
 **Email Order-Confirmation Agents (Planned — next build focus)**
-Per-retailer order-confirmation email parsers, starting with LEGO, then one agent per retailer, then a general confirmation agent to ensure all confirmation emails are handled. Must handle a new/unbuilt retailer gracefully when an email arrives. CRITICAL: must enrich/match existing orders, not duplicate line items (no cross-path idempotency guard exists). Leave buy_reason and purchase_trigger null — agents never guess intent or channel.
+Per-retailer order-confirmation email parsers, starting with LEGO. CRITICAL: must enrich/match existing orders, not duplicate line items. Leave buy_reason and purchase_trigger null — agents never guess intent or channel.
 
-**Hit List (Future opt-in enrichment — NOT core)**
-Annual list of sets retiring within the calendar year that meet appreciation-probability metrics, built at start of each year. When present, it is the authoritative source that auto-sets `buy_reason = planned` for matching buys. Opt-in premium/power-user feature — deliberately NOT part of basic onboarding (heavy onboarding deters adoption). Depends on unbuilt systems (Set Reference Agent, accumulated history, Brickset/Bricktap validation). Design for it now, build later. Connects to `promotional_cash` (expiry data could later auto-detect `promo_expiration` buys).
+**Product Catalog Agent (Phase 2 — Agent 08)**
+Manages product_catalog and hit_list tables. Manual entry, CSV upload, Bricktap list upload. Auto-creates minimal entry when order references unknown product. Edit and update catalog entries. See Multi-Vertical Architecture section above for full design.
 
 **Set Reference Agent (Planned — before Phase 2)**
-Local database of all LEGO sets updated on a schedule. Fields: set number, name, theme, MSRP, retirement status, EOL date, release date, piece count, UPC, EAN.
-- Brickset API primary sync source candidate
-- LEGO.com catalog endpoints — Brick Dynasty creator pulls directly from LEGO. Rewatch episode to confirm approach.
-- Pre-build research: validate Brickset retirement data against Bricktap lists on 20-30 sets
-- Initial seed: existing Bricktap retirement lists
-- Sync design: full initial load once, weekly delta updates after
-- UPC/EAN from Brickset connects Walmart sales to inventory by set number
+Local database of all LEGO sets updated on a schedule. Fields: set number, name, theme, MSRP, retirement status, EOL date, release date, piece count, UPC, EAN. Brickset API primary sync source candidate. Initial seed: existing Bricktap retirement lists. UPC/EAN from Brickset connects Walmart sales to inventory by set number. Pre-build: validate Brickset retirement data against Bricktap lists on 20-30 sets.
 
 **Purchase Planner Agent (Phase 2 — A-002)**
-Pre-purchase optimization. User selects retailer and budget, target sets feed in, agent calculates optimal combination to maximize rewards, hit GWP threshold with minimum overspend, reach next stamp/tier. Stays in plan mode until user enters order number and gift card details. Then flows to manual order entry. No double entry.
+Consumes hit list as input queue. User selects retailer and budget, agent calculates optimal buying combination to maximize rewards, hit GWP threshold with minimum overspend, reach next stamp/tier. Output feeds directly into Agent 02 order entry. No double entry.
 
 **WFS Shipment Portal (Phase 2)**
-Build shipment manifest from inventory, export as CSV matching WFS upload format. Eliminates manual data entry into WFS portal. Extends to FBA shipment creation for Amazon.
+Build shipment manifest from inventory, export as CSV matching WFS upload format. Eliminates manual data entry into WFS portal.
 
 **Storage Cost Allocation (A-006 — Phase 1 storage session)**
-New tables: storage_locations, storage_snapshots. Two new inventory columns: storage_location_id, storage_assigned_date. Monthly automated snapshots. Carrying cost calculated dynamically from snapshot history. Projections when EOL date available from set reference database.
+New tables: storage_locations, storage_snapshots. Monthly automated snapshots. Carrying cost calculated dynamically from snapshot history.
 
 **Sales Import System**
-Walmart reconciliation report structure confirmed: group by Customer Order # and Customer Order line #, sum correct Amount Types. Net proceeds = Product Price + Walmart Funded Savings - 8% commission - WFS fulfillment fee. Tax collected and withheld net to zero. Partner GTIN column = UPC/EAN — connects sales to inventory. Commission Saving column is informational only — negotiated collectibles rate vs standard. Do not use as financial input.
+Walmart reconciliation report structure confirmed: Net proceeds = Product Price + Walmart Funded Savings - 8% commission - WFS fulfillment fee. Partner GTIN column = UPC/EAN connects sales to inventory.
 
 **Intelligence / Reporting Layer (Phase 2-3)**
-Passive reporting, pattern recognition, alerts. Requires 6-12 months of data. Examples: stamp expiry alerts, cashback payout timing, seasonal sourcing signals. buy_reason + purchase_trigger tagging powers pattern recognition — ROI by intent, channel-source effectiveness.
-
-**Buying History / Purchase Intelligence (Phase 2-3)**
-Discount % by retailer over time, sell-through velocity, ROI by buy_reason. Turns gut feel into repeatable sourcing decisions.
-
-**Inventory / Storage System**
-Unit-level tracking — box tracking, location awareness, WFS shipment creation.
-
-**Monthly Expenses Tracker**
-Storage units, subscriptions, QuickBooks, recurring overhead.
+Passive reporting, pattern recognition, alerts. Requires 6-12 months of data. buy_reason + purchase_trigger tagging powers pattern recognition — ROI by intent, channel-source effectiveness, cross-vertical ROI comparison.
 
 **Pre-UI Design Task**
-Capture screenshots of current reselling software using Claude in Chrome. Annotate pain points and things done well. Produces design brief for ResellOS UI. Key pain points already identified: orders lose cohesion after entry (can't edit without deleting), gift card table popup centers on page requiring scroll. Design direction: high end, polished, dark aesthetic, purposeful color for status, expandable from day one. UI will enforce buy_reason/purchase_trigger values via dropdowns.
+Capture screenshots of current reselling software using Claude in Chrome. Annotate pain points. Design direction: high-end, dark, polished, purposeful color for status. UI will enforce buy_reason/purchase_trigger values via dropdowns.
 
 ---
 
@@ -256,6 +264,10 @@ Capture screenshots of current reselling software using Claude in Chrome. Annota
 | Buy reason / purchase trigger | Two separate fields: buy_reason = intent (planned/opportunistic/promo_expiration), purchase_trigger = channel (community_alert/deal_software_alert/self_discovered). Both nullable, hidden for basic users. Mechanic stays in its own tables. (Revised 2026-05-30) |
 | Build environment | VS Code + Claude Code, Python, GitHub |
 | API independence | Core functions must never depend on third-party API. Enrichment APIs optional layers only. |
+| Multi-vertical product identity | One product_catalog table, all verticals. vertical field separates them. identifier_type normalizes product IDs across categories. Catalog edits never affect locked cost basis. (Decided 2026-05-31) |
+| Order-first onboarding | No catalog pre-load required. Minimal catalog entry auto-created on first order. Import methods available but never mandatory. (Decided 2026-05-31) |
+| Discontinuation date | Generalizes is_retiring to all verticals on product_catalog. is_retiring stays on line_items as LEGO operational flag. (Decided 2026-05-31) |
+| Hit list design | Status layer on product_catalog. active → purchased → abandoned. Abandoned preserves history. Notes field = sourcing journal. Purchase Planner consumes as input queue. (Decided 2026-05-31) |
 
 ---
 
@@ -280,20 +292,20 @@ Questions to answer before year-end:
 5. **Brickset API validation** — validate retirement data against Bricktap lists on 20-30 sets before committing as primary sync source.
 6. **LEGO catalog endpoints** — Brick Dynasty creator pulls from LEGO directly. Rewatch episode to confirm approach before Set Reference Agent design session.
 7. **Cashback tax treatment** — pending CPA guidance June 10. Determines whether cashback layer in cost basis engine activates.
-8. **S08 minor deferred items** — cleanup sprint needed before inventory layer is built. See S08 section above.
-9. **Backfill set_number on old line items** — parser captures set_number now (code done), but rows written before that change have null set_number. Re-parse old invoices to backfill.
+8. **S08 minor deferred items** — cleanup sprint needed in S09. See S08 section above.
+9. **Backfill set_number on old line items** — parser captures set_number now, but rows written before that change have null. Re-parse old invoices to backfill.
 10. **Duplicate line items** — cross-path (manual + parser) historical artifact. Inspect and clean before further cost-basis work.
 11. **GitHub MCP not connecting** — does not appear under connections. Standalone troubleshoot.
-12. **Stale project Instructions field** — the project's Instructions panel still holds the old 2026-05-26 context. Sync it to this current doc so fresh conversations don't start stale.
+12. **Unit-level inventory schema confirmation** — confirm one row per physical unit before building inventory layer. Unit-level rows enable Specific Identification costing; harder to retrofit later.
 
 ---
 
 ## Document Hierarchy — What Supersedes What
 
-1. **Session Log (SESSION_LOG.md)** — single source of truth for build state. Read this before any VS Code session. If anything conflicts, Session Log wins.
+1. **Session Log (ResellOS_Session_Log.md)** — single source of truth for build state. Read this before any VS Code session. If anything conflicts, Session Log wins.
 2. **This context document** — broad orientation for Claude at conversation start.
-3. **Master Architecture Document** — design decisions and agent map. Note: references SQLite which is overridden.
-4. **Project Map** — session plan. Note: session numbering shifted from original plan — defer to Session Log for actual sequence.
+3. **Master Architecture Document (v2.0)** — all design decisions current, SQLite references removed, multi-vertical catalog design included.
+4. **Project Map (v2.0)** — accurate session history through S8.5, forward plan through community launch and multi-vertical expansion.
 5. **Ideas Doc** — future feature candidates only. Sequencing section is stale — ignore it.
 
 ---
