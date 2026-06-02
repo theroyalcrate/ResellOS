@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Last Updated** | 2026-05-30 |
+| **Last Updated** | 2026-06-01 |
 | **Sessions Complete** | S01 → S08 ✓, S8.5 ✓ |
 | **Next Session** | S09 |
 | **Phase** | P1 — Week 2 |
@@ -45,6 +45,7 @@
 | S07 | Cashback pool manager — 6 platforms. agent_07_cashback.py. 3 modes. Migration 007. Code review: 2 CRITICAL + 4 MODERATE fixed. Committed + pushed. | ✓ Complete |
 | S08 | Cost basis engine — 5 layers, 4 costing methods, GWP Philosophy C. Migrations 008-010. Verified on T487170400. 2 CRITICAL + 4 MODERATE fixed. Committed + pushed. | ✓ Complete |
 | S8.5 | Intent/channel field split — buy_reason + purchase_trigger refactor. Data cleaned. Code-only (no migration). | ✓ Complete |
+| Pre-S09 (2026-06-01) | Outside VS Code: Obsidian + ResellOS-Knowledge repo setup, PARA vault structure, DECISION 017 added to architecture doc. | ✓ Complete |
 | S09 | Layer 3 verification + Agent 1B invoice filing + Gmail/Drive connection | → Next |
 
 ---
@@ -65,6 +66,18 @@
 ---
 
 ## Session History
+
+### Pre-S09 — Outside VS Code Activity ✓ Done — 2026-06-01
+
+**What was done (outside VS Code, no code changes):**
+- Obsidian installed as knowledge management tool
+- ResellOS-Knowledge private GitHub repo created at github.com/theroyalcrate/ResellOS-Knowledge
+- PARA folder structure built inside Obsidian vault: Projects / Areas / Resources / Archive with subfolders
+- Vault wired to GitHub remote and push verified
+- DECISION 017 (Order Edit Lifecycle & Cost Basis Trigger Gate) added to ResellOS Master Architecture Document — defines order status values (stub → pending_review → confirmed → placed → settled), cost basis trigger gate, email agent field rules, editable fields by status, and gift card ledger atomic write pattern
+- Architecture document version bumped to v2.1, `.gitignore` updated to exclude `/knowledge`
+
+---
 
 ### S8.5 — Intent/Channel Field Split — buy_reason + purchase_trigger Refactor ✓ Done — 2026-05-30
 

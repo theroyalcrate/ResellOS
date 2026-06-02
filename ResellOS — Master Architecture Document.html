@@ -137,7 +137,7 @@
 <div class="wrap">
 
   <div class="header">
-    <div class="header-tag">// Master Architecture Document — v2.0 — Updated 2026-05-31</div>
+    <div class="header-tag">// Master Architecture Document — v2.1 — Updated 2026-06-01</div>
     <div class="header-title">Resell<span>OS</span></div>
     <div class="header-sub">Architecture, decisions, database schema, agent map, and multi-vertical product catalog design. Single source of design truth — Session Log supersedes on build state.</div>
     <div class="header-stats">
@@ -242,6 +242,22 @@
       <div class="decision-title">DECISION 016 — Hit List as Status Layer on Product Catalog</div>
       <div class="decision-body">The hit list is not a separate system — it is a <strong>status layer on top of product_catalog</strong>. A product moves: catalog entry → hit list (active) → purchased → inventory → sold. Hit list status values: <code>active</code> | <code>purchased</code> | <code>abandoned</code>. <strong>Abandoned preserves history</strong> — never deletes. Notes field on hit_list becomes a sourcing decision journal that feeds the intelligence layer. Purchase Planner (Phase 2) consumes hit list as its input queue.</div>
     </div>
+
+    <div class="adr-item">
+  <div class="adr-num">DECISION 017</div>
+  <div class="adr-main">
+    <div class="adr-title">Order Edit Lifecycle &amp; Cost Basis Trigger Gate</div>
+    <div class="adr-date">2026-06-01</div>
+    <div class="adr-body">
+      <p>Orders move through a defined lifecycle before cost basis is ever calculated. Cost basis is gated behind explicit user confirmation — it never runs automatically on a stub or partially-complete order.</p>
+      <p><strong>Order status values:</strong> stub (email agent created, payment details incomplete — cost basis blocked) → pending_review (user opened, something still needs attention — cost basis blocked) → confirmed (user explicitly confirmed all inputs — cost basis calculates once) → placed (pickup orders only, awaiting pickup — cost basis blocked until pickup confirmed) → settled (12-month window passed, cost basis locked permanently).</p>
+      <p><strong>Multiple entry paths — all valid:</strong> (1) Email agent creates stub → user confirms and adds details. (2) Manual entry at purchase → email arrives later to enrich. (3) Purchase Planner → order placed → email confirms. All three paths produce the same settled order record. The status gate applies regardless of entry path.</p>
+      <p><strong>What email agents fill in:</strong> order number, retailer, date, line items, GWP flags, order total, tax, rewards earned, credit card last 4 if visible. Agents never fill in gift_card_last4, buy_reason, purchase_trigger, or cashback_rate.</p>
+      <p><strong>Editable fields by status:</strong> stub/pending_review — any field editable. confirmed — only fields that do not affect cost basis (buy_reason, notes, storage_location, purchase_trigger). Fields affecting cost basis require explicit reopen to pending_review, which clears calculated cost basis and recalculates on re-confirm. settled — nothing reopens cost basis; P&amp;L adjustment entries only.</p>
+      <p><strong>Gift card ledger atomic write:</strong> When order moves to confirmed, two writes happen atomically — order status confirmed + cost basis calculated, and gift card balance reduced by amount applied. Reopening to pending_review reverses the prior balance reduction before applying the new one. Gift card ledger stores order_id on every debit so reversals are unambiguous.</p>
+    </div>
+  </div>
+</div>
   </div>
 
   <!-- LIFECYCLE -->
