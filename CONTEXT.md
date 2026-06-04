@@ -1,5 +1,5 @@
 # ResellOS — Claude Context Document
-**Last Updated: 2026-05-31**
+**Last Updated: 2026-06-03**
 **Read this first. This document orients Claude at the start of every conversation.**
 
 > **Document home & sync rule:** The source-of-truth copy lives in the GitHub repo (`theroyalcrate/ResellOS`), edited via Claude Code. An identical copy lives in the Claude project here so chat-Claude starts every conversation current. **When this doc changes: update the repo copy via Claude Code first, then paste the same content into the project copy.** Keep them identical — drift between the two causes re-walking already-completed work.
@@ -33,12 +33,13 @@ Core transactions, cost basis, inventory, and sales always live in the user's ow
 - **Version control:** GitHub — repo: theroyalcrate/ResellOS
 - **Development environment:** VS Code + Claude Code extension
 - **MCP connectors connected:** Supabase ✓, GitHub ✗ (not connecting — does not appear under connections; standalone troubleshoot pending. Chat-Claude can reach Supabase directly but NOT GitHub or the local repo — use Claude Code for anything touching local files.)
+- **Knowledge vault:** Obsidian + ResellOS-Knowledge private GitHub repo (theroyalcrate/ResellOS-Knowledge). PARA structure: Projects / Areas / Resources / Archive. Business logic patterns live at Areas/business-logic/. Set up 2026-06-01.
 
 ---
 
 ## Build State — Where We Are Right Now
 
-**Sessions S01 through S08 are complete and committed to GitHub. S8.5 (field refactor) done 2026-05-30. Architecture and Project Map documents updated to v2.0 on 2026-05-31.**
+**Sessions S01 through S08 are complete and committed to GitHub. S8.5 (field refactor) done 2026-05-30. Architecture and Project Map documents updated to v2.0 on 2026-05-31. Architecture doc bumped to v2.1 on 2026-06-01 (DECISION 017 — Order Edit Lifecycle & Cost Basis Trigger Gate added). Obsidian knowledge vault (ResellOS-Knowledge) set up 2026-06-01 with PARA structure and wired to GitHub.**
 
 | Session | What Was Built | Status |
 |---------|---------------|--------|
@@ -210,6 +211,22 @@ Monthly snapshots capture per-unit carrying cost rate. Extended cost basis = tru
 
 **Duplicate line items (data hygiene, open):** Some early orders have a set represented twice — once from the parser and once from manual Agent 02 entry. Cross-path historical artifact, NOT an ongoing bug. Must be cleaned before further cost-basis work. Email agents must enrich existing orders, never duplicate line items.
 
+**Email order-matching cascade (A-007 — 2026-06-03):**
+Every incoming email is matched to an existing order via a strength-ordered cascade — never creates duplicate line items, never auto-merges on basket alone. This is the cross-path idempotency guard flagged as missing in S8.5. Applies to all per-retailer email agents.
+
+Cascade tiers (strength order):
+1. **Order number** — deterministic, enrich directly. First appears in the shipping confirmation subject — never in the order confirmation email.
+2. **Set/article number from invoice** — deterministic at line level. Invoice may arrive late or not at all during high-volume drop periods.
+3. **Set name + price + date window** — probabilistic. Resolve via product_catalog → whole-basket match → review queue only. Never auto-commit on name alone. Normalize the name, resolve to a catalog_id (auto-create a minimal flagged entry if unknown), match the whole basket.
+
+Identical-basket disambiguation: when the same basket appears multiple times in a short window, never guess on basket content alone. Order number is the only true per-order identity. When an email carries an order number, claim the first unclaimed identical orphan stub and stamp it — interchangeable at claim time, the order number is the identity thereafter. When an email has no order number (order confirmation), distinct emails = distinct orders; deduplicate at email message-id level only, never on basket content.
+
+Keystone binding sequence: order confirmation → shipping confirmation (first email carrying both order number + tracking, binding them) → cashback claim (Rakuten keys on order number) → invoice.
+
+Implementation requirements: review queue (confidence score + candidate cluster), claim ledger, message-id deduplication. Never auto-delete or auto-merge — flag duplicates/abandoned, preserve history. Recommendation: capture order number at order creation (Purchase Planner / manual entry) so stubs are born numbered; name-tier matching is the safety net for confirmation-first flows only.
+
+Full detail: ResellOS-Knowledge vault at Areas/business-logic/email-order-matching.md.
+
 ---
 
 ## Planned Future Systems (Not Yet Built)
@@ -268,6 +285,7 @@ Capture screenshots of current reselling software using Claude in Chrome. Annota
 | Order-first onboarding | No catalog pre-load required. Minimal catalog entry auto-created on first order. Import methods available but never mandatory. (Decided 2026-05-31) |
 | Discontinuation date | Generalizes is_retiring to all verticals on product_catalog. is_retiring stays on line_items as LEGO operational flag. (Decided 2026-05-31) |
 | Hit list design | Status layer on product_catalog. active → purchased → abandoned. Abandoned preserves history. Notes field = sourcing journal. Purchase Planner consumes as input queue. (Decided 2026-05-31) |
+| Order edit lifecycle & cost basis trigger gate | Order status values: stub → pending_review → confirmed → placed → settled. Cost basis gated behind explicit user confirmation — never auto-runs on a stub or partial order. Email agents fill: order number, retailer, date, line items, GWP flags, totals, rewards earned, CC last 4. Agents never fill: gift_card_last4, buy_reason, purchase_trigger, cashback_rate. Confirmed → atomic write: cost basis + gift card balance debit. Reopening to pending_review reverses the prior balance reduction. Settled → P&L adjustments only, cost basis locked permanently. (DECISION 017, 2026-06-01) |
 
 ---
 
@@ -304,7 +322,7 @@ Questions to answer before year-end:
 
 1. **Session Log (ResellOS_Session_Log.md)** — single source of truth for build state. Read this before any VS Code session. If anything conflicts, Session Log wins.
 2. **This context document** — broad orientation for Claude at conversation start.
-3. **Master Architecture Document (v2.0)** — all design decisions current, SQLite references removed, multi-vertical catalog design included.
+3. **Master Architecture Document (v2.1)** — all design decisions current through DECISION 017 (2026-06-01), SQLite references removed, multi-vertical catalog design included.
 4. **Project Map (v2.0)** — accurate session history through S8.5, forward plan through community launch and multi-vertical expansion.
 5. **Ideas Doc** — future feature candidates only. Sequencing section is stale — ignore it.
 

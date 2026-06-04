@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Last Updated** | 2026-06-01 |
+| **Last Updated** | 2026-06-03 |
 | **Sessions Complete** | S01 → S08 ✓, S8.5 ✓ |
 | **Next Session** | S09 |
 | **Phase** | P1 — Week 2 |
@@ -46,6 +46,7 @@
 | S08 | Cost basis engine — 5 layers, 4 costing methods, GWP Philosophy C. Migrations 008-010. Verified on T487170400. 2 CRITICAL + 4 MODERATE fixed. Committed + pushed. | ✓ Complete |
 | S8.5 | Intent/channel field split — buy_reason + purchase_trigger refactor. Data cleaned. Code-only (no migration). | ✓ Complete |
 | Pre-S09 (2026-06-01) | Outside VS Code: Obsidian + ResellOS-Knowledge repo setup, PARA vault structure, DECISION 017 added to architecture doc. | ✓ Complete |
+| Pre-S09 (2026-06-03) | Outside VS Code: vault content phase begun — retailer note template, LEGO retailer note, email order-matching cascade note. A-007 added to CONTEXT.md. | ✓ Complete |
 | S09 | Layer 3 verification + Agent 1B invoice filing + Gmail/Drive connection | → Next |
 
 ---
@@ -66,6 +67,19 @@
 ---
 
 ## Session History
+
+### Pre-S09 — Vault Content Phase Begun ✓ Done — 2026-06-03
+
+**What was done (outside VS Code, no code changes):**
+- Obsidian vault content phase begun — ResellOS-Knowledge vault
+- Created a generalizable retailer note template
+- Created the LEGO retailer note
+- Created email order-matching cascade pattern note in ResellOS-Knowledge at Areas/business-logic/email-order-matching.md
+- Confirmed and captured the email order-matching cascade (with identical-basket disambiguation) as Amendment A-007
+- A-007 (Email Order-Matching Cascade) added to CONTEXT.md Known Edge Cases section — covers cascade tier ordering, identical-basket disambiguation, keystone binding sequence, idempotency requirements
+- CONTEXT.md also updated: vault setup noted in Tech Stack, DECISION 017 added to decisions table, architecture doc version corrected to v2.1
+
+---
 
 ### Pre-S09 — Outside VS Code Activity ✓ Done — 2026-06-01
 
