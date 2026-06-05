@@ -1,5 +1,5 @@
 # ResellOS — Claude Context Document
-**Last Updated: 2026-06-03**
+**Last Updated: 2026-06-04**
 **Read this first. This document orients Claude at the start of every conversation.**
 
 > **Document home & sync rule:** The source-of-truth copy lives in the GitHub repo (`theroyalcrate/ResellOS`), edited via Claude Code. An identical copy lives in the Claude project here so chat-Claude starts every conversation current. **When this doc changes: update the repo copy via Claude Code first, then paste the same content into the project copy.** Keep them identical — drift between the two causes re-walking already-completed work.
@@ -32,7 +32,7 @@ Core transactions, cost basis, inventory, and sales always live in the user's ow
 - **Language:** Python 3.14 with virtual environment
 - **Version control:** GitHub — repo: theroyalcrate/ResellOS
 - **Development environment:** VS Code + Claude Code extension
-- **MCP connectors connected:** Supabase ✓, GitHub ✗ (not connecting — does not appear under connections; standalone troubleshoot pending. Chat-Claude can reach Supabase directly but NOT GitHub or the local repo — use Claude Code for anything touching local files.)
+- **MCP connectors connected:** Supabase ✓, GitHub ✓ (read access confirmed 2026-06-03 via Claude Github 3 connector. Chat-Claude can read the repo directly — CONTEXT.md and SESSION_LOG.md no longer need to be pasted into the project copy manually. Writes still route through Claude Code.)
 - **Knowledge vault:** Obsidian + ResellOS-Knowledge private GitHub repo (theroyalcrate/ResellOS-Knowledge). PARA structure: Projects / Areas / Resources / Archive. Business logic patterns live at Areas/business-logic/. Set up 2026-06-01.
 
 ---
@@ -313,7 +313,7 @@ Questions to answer before year-end:
 8. **S08 minor deferred items** — cleanup sprint needed in S09. See S08 section above.
 9. **Backfill set_number on old line items** — parser captures set_number now, but rows written before that change have null. Re-parse old invoices to backfill.
 10. **Duplicate line items** — cross-path (manual + parser) historical artifact. Inspect and clean before further cost-basis work.
-11. **GitHub MCP not connecting** — does not appear under connections. Standalone troubleshoot.
+11. ~~GitHub MCP not connecting~~ — Resolved 2026-06-03. GitHub connector working; chat-Claude has read access to the repo.
 12. **Unit-level inventory schema confirmation** — confirm one row per physical unit before building inventory layer. Unit-level rows enable Specific Identification costing; harder to retrofit later.
 
 ---

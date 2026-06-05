@@ -4,13 +4,13 @@
 
 | | |
 |---|---|
-| **Last Updated** | 2026-06-03 |
+| **Last Updated** | 2026-06-04 |
 | **Sessions Complete** | S01 → S08 ✓, S8.5 ✓ |
 | **Next Session** | S09 |
 | **Phase** | P1 — Week 2 |
 | **GitHub** | theroyalcrate/ResellOS |
 
-> **Document home & sync rule:** Source-of-truth copy lives in the GitHub repo, edited via Claude Code. An identical copy lives in the Claude project so chat-Claude stays current. Update the repo copy first, then paste identical content into the project copy. Keep them identical.
+> **Document home & sync rule:** Source-of-truth copy lives in the GitHub repo, edited via Claude Code. GitHub MCP read access confirmed 2026-06-03 — chat-Claude can read the repo directly. Manual paste into project copy is no longer required. Writes still route through Claude Code.
 
 ---
 
@@ -46,7 +46,7 @@
 | S08 | Cost basis engine — 5 layers, 4 costing methods, GWP Philosophy C. Migrations 008-010. Verified on T487170400. 2 CRITICAL + 4 MODERATE fixed. Committed + pushed. | ✓ Complete |
 | S8.5 | Intent/channel field split — buy_reason + purchase_trigger refactor. Data cleaned. Code-only (no migration). | ✓ Complete |
 | Pre-S09 (2026-06-01) | Outside VS Code: Obsidian + ResellOS-Knowledge repo setup, PARA vault structure, DECISION 017 added to architecture doc. | ✓ Complete |
-| Pre-S09 (2026-06-03) | Outside VS Code: vault content phase begun — retailer note template, LEGO retailer note, email order-matching cascade note. A-007 added to CONTEXT.md. | ✓ Complete |
+| Pre-S09 (2026-06-03) | Vault content phase: lego.md + lego-instore.md + email-order-matching.md committed to Knowledge vault. GitHub MCP read access confirmed. CONTEXT.md + SESSION_LOG.md corrected. A-007 in CONTEXT.md. | ✓ Complete |
 | S09 | Layer 3 verification + Agent 1B invoice filing + Gmail/Drive connection | → Next |
 
 ---
@@ -68,16 +68,18 @@
 
 ## Session History
 
-### Pre-S09 — Vault Content Phase Begun ✓ Done — 2026-06-03
+### Pre-S09 — Vault Content Phase + GitHub MCP Confirmed ✓ Done — 2026-06-03
 
-**What was done (outside VS Code, no code changes):**
-- Obsidian vault content phase begun — ResellOS-Knowledge vault
-- Created a generalizable retailer note template
-- Created the LEGO retailer note
-- Created email order-matching cascade pattern note in ResellOS-Knowledge at Areas/business-logic/email-order-matching.md
-- Confirmed and captured the email order-matching cascade (with identical-basket disambiguation) as Amendment A-007
-- A-007 (Email Order-Matching Cascade) added to CONTEXT.md Known Edge Cases section — covers cascade tier ordering, identical-basket disambiguation, keystone binding sequence, idempotency requirements
-- CONTEXT.md also updated: vault setup noted in Tech Stack, DECISION 017 added to decisions table, architecture doc version corrected to v2.1
+**What was done (outside VS Code and in chat-Claude):**
+- Vault scaffolding already existed from 2026-06-01; content phase begun
+- Discovered CONTEXT.md and SESSION_LOG.md were stale (predated 2026-06-01 vault setup) — corrected both documents
+- GitHub MCP read access confirmed (Claude Github 3 connector) — chat-Claude can now read the repo directly; manual paste of project copy no longer required
+- Retailer notes committed to ResellOS-Knowledge vault:
+  - **lego.md** (updated) — earn rate confirmed pre-tax, full LEGO email family documented with real samples (order confirmation, shipping confirmation, invoice), promo-code GWP class (StudentBeans, Capital One Shopping), private edge cases (purchase limits, GWP-on-cancellation mechanic), invoice layout confirmed from real receipt
+  - **lego-instore.md** (new) — receipt signature, strategic context (in-store vs online trade-offs), cashback null default for in-store, in-store exclusive bonus points
+- **email-order-matching.md** committed (A-007) — full order matching cascade with identical-basket disambiguation, keystone shipping email binding, email-level idempotency, claim ledger requirement
+- CPA meeting prep note identified as next vault priority (June 10, 9:00am)
+- Next vault sessions: Barnes, Kohl's, Macy's retailer notes; cashback platform email patterns; CPA prep note
 
 ---
 
