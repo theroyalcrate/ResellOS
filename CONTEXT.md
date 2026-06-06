@@ -53,9 +53,10 @@ Core transactions, cost basis, inventory, and sales always live in the user's ow
 | S07 | Agent 07 — cashback pool manager, 6 platforms | ✓ Done |
 | S08 | Cost basis engine (Agent 04) — 5 layers, 4 costing methods, GWP Philosophy C, verified | ✓ Done |
 | S8.5 | Intent/channel field split — buy_reason + purchase_trigger refactor, data cleaned | ✓ Done |
-| S09 | Barnes Scrapyard verification (Layer 3 rewards) + Agent 1B invoice filing | → Next |
+| S09 | Kohl's retailer note (5 real orders verified), tax correction (rewards_reduce_taxable_base = true), migration 011, DECISION 018 | ✓ Done |
+| S10 | Phase 3: variable-earn schema (per-order observed rewards + Kohl's Cash block model with explicit expiration) + earn cliff pin against June 8th orders | → Next |
 
-**Database state:** 22 tables live, migrations 002-027 + 008-010 applied, 5 orders in DB, RLS enabled on all tables.
+**Database state:** 22 tables live, migrations through 011 applied, 5 orders in DB, RLS enabled on all tables.
 
 ---
 
@@ -103,7 +104,7 @@ All 7 retailers have full reward profiles built in Agent 02:
 |----------|----------------|-------|
 | LEGO | Insider points (6.5 pts × spend × multiplier), per-set bonuses | Online only, no pickup. supports_pickup = false always. |
 | Barnes & Noble | Stamps = floor(pretax/10) × multiplier | Stamp threshold tracking critical |
-| Kohl's | 5% Rewards Cash + Event Kohl's Cash ($10/$50 thresholds) + pickup bonus | Cliff edge on thresholds |
+| Kohl's | Variable-rate Rewards Cash (5–15%, card-independent) + event Kohl's Cash (block value varies by event: $10 Sep/Oct, $15 Nov observed) + pickup bonus | rewards_reduce_taxable_base = true (pre-tax discounts, confirmed 5 orders). Earn cliff ~$50 post-coupon. Read amounts from invoice — never compute from a rate. |
 | Macy's | Bronze tier 1pt/$1, Bonus Day overrides, Star Money | Gift cards earn 0 points |
 | Walmart Business | 2% on orders over $250 — calculated on original order value at placement, NOT final total | Pickup orders common |
 | Target | Circle debit card flag, one-off offers manual entry | Pickup supported |
@@ -286,6 +287,7 @@ Capture screenshots of current reselling software using Claude in Chrome. Annota
 | Discontinuation date | Generalizes is_retiring to all verticals on product_catalog. is_retiring stays on line_items as LEGO operational flag. (Decided 2026-05-31) |
 | Hit list design | Status layer on product_catalog. active → purchased → abandoned. Abandoned preserves history. Notes field = sourcing journal. Purchase Planner consumes as input queue. (Decided 2026-05-31) |
 | Order edit lifecycle & cost basis trigger gate | Order status values: stub → pending_review → confirmed → placed → settled. Cost basis gated behind explicit user confirmation — never auto-runs on a stub or partial order. Email agents fill: order number, retailer, date, line items, GWP flags, totals, rewards earned, CC last 4. Agents never fill: gift_card_last4, buy_reason, purchase_trigger, cashback_rate. Confirmed → atomic write: cost basis + gift card balance debit. Reopening to pending_review reverses the prior balance reduction. Settled → P&L adjustments only, cost basis locked permanently. (DECISION 017, 2026-06-01) |
+| Per-retailer tax behavior (rewards_reduce_taxable_base) | Per-retailer boolean flag, default false. true = promo-cash/coupons are pre-tax discounts that reduce the taxable base; engine must use actual invoice tax, never recompute it. Set only from real invoice evidence — never assumed. Kohl's = true, confirmed from 5 real orders (Sep 2025 – Jun 2026). Corrects prior wrong assumption that Kohl's Cash is post-tax tender. Macy's Star Money was on the same false assumption — must be verified independently against a real Macy's invoice before setting Macy's flag. (DECISION 018, 2026-06-05, supersedes prior Kohl's rewards-tax framing.) |
 
 ---
 
@@ -306,15 +308,17 @@ Questions to answer before year-end:
 1. **CPA confirmation on FIFO** — confirm before year-end, do not change after data accumulates.
 2. **Google Drive migration** — 15 months of historical invoices in personal Drive, need to move to business Drive before invoice archive automation can run.
 3. **Walmart Business rewards basis** — confirm whether 2% calculated on original order value or final total. Real example: $290 placed, $204 final, $8.40 credited.
-4. **Kohl's cancellation cliff edge** — confirm from Q4 2025 history whether Kohl's eliminated Kohl's Cash entirely or reduced proportionally when cancellation crossed threshold.
-5. **Brickset API validation** — validate retirement data against Bricktap lists on 20-30 sets before committing as primary sync source.
-6. **LEGO catalog endpoints** — Brick Dynasty creator pulls from LEGO directly. Rewatch episode to confirm approach before Set Reference Agent design session.
-7. **Cashback tax treatment** — pending CPA guidance June 10. Determines whether cashback layer in cost basis engine activates.
-8. **S08 minor deferred items** — cleanup sprint needed in S09. See S08 section above.
-9. **Backfill set_number on old line items** — parser captures set_number now, but rows written before that change have null. Re-parse old invoices to backfill.
-10. **Duplicate line items** — cross-path (manual + parser) historical artifact. Inspect and clean before further cost-basis work.
-11. ~~GitHub MCP not connecting~~ — Resolved 2026-06-03. GitHub connector working; chat-Claude has read access to the repo.
-12. **Unit-level inventory schema confirmation** — confirm one row per physical unit before building inventory layer. Unit-level rows enable Specific Identification costing; harder to retrofit later.
+4. **Kohl's cancellation behavior (updated 2026-06-05)** — community sources say Kohl's Cash is retained on cancellation (not eliminated). Real risk is **stranded gift card balances**: gift cards are not auto-refunded; must call Kohl's to recover (replacement cards mailed). Verify Kohl's Cash retention against a real cancellation if one occurs.
+5. **Kohl's Cash earn cliff — exact sub-$50 boundary** — earn threshold is just under $50 post-coupon. Exact penny boundary not yet pinned. Pin against June 8th orders (S10 task).
+6. **Macy's Star Money pre-tax vs post-tax** — was on the same false `rewards_reduce_taxable_base = false` assumption as Kohl's, which just proved wrong for Kohl's. Do not change Macy's flag without a real Macy's invoice. Verify when the Macy's retailer note is built.
+7. **agent_08 naming collision** — `agent_08_cost_basis.py` is named after session S08, but the conceptual agent numbering calls the cost basis engine "Agent 04" and reserves "Agent 08" for the unbuilt Product Catalog Agent (per CONTEXT.md Planned Future Systems). When Product Catalog is built, `agent_08_product_catalog.py` would collide with the existing file. Decide on a renaming convention before that session.
+8. **Brickset API validation** — validate retirement data against Bricktap lists on 20-30 sets before committing as primary sync source.
+9. **LEGO catalog endpoints** — Brick Dynasty creator pulls from LEGO directly. Rewatch episode to confirm approach before Set Reference Agent design session.
+10. **Cashback tax treatment** — pending CPA guidance June 10. Determines whether cashback layer in cost basis engine activates.
+11. **S08 minor deferred items** — cleanup sprint needed. tax_paid_allocated always 0. Mode 3 never writes gwp.settlement_date. Dead elif branch in collect_gwp_proceeds. net_economic_cost calculated twice. _test_setup_t487170400.py → /tests.
+12. **Backfill set_number on old line items** — parser captures set_number now, but rows written before that change have null. Re-parse old invoices to backfill.
+13. **Duplicate line items** — cross-path (manual + parser) historical artifact. Inspect and clean before further cost-basis work.
+14. **Unit-level inventory schema confirmation** — confirm one row per physical unit before building inventory layer. Unit-level rows enable Specific Identification costing; harder to retrofit later.
 
 ---
 
@@ -322,7 +326,7 @@ Questions to answer before year-end:
 
 1. **Session Log (ResellOS_Session_Log.md)** — single source of truth for build state. Read this before any VS Code session. If anything conflicts, Session Log wins.
 2. **This context document** — broad orientation for Claude at conversation start.
-3. **Master Architecture Document (v2.1)** — all design decisions current through DECISION 017 (2026-06-01), SQLite references removed, multi-vertical catalog design included.
+3. **Master Architecture Document (v2.1)** — all design decisions current through DECISION 018 (2026-06-05), SQLite references removed, multi-vertical catalog design included.
 4. **Project Map (v2.0)** — accurate session history through S8.5, forward plan through community launch and multi-vertical expansion.
 5. **Ideas Doc** — future feature candidates only. Sequencing section is stale — ignore it.
 

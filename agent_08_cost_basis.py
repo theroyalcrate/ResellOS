@@ -4,6 +4,10 @@ ResellOS - Agent 08: Cost Basis Engine
 Computes and records cost basis for each inventory unit across five layers:
 
   Layer 1  Invoice cost         line_item.line_total / quantity
+           + tax_paid           order.tax_paid — actual invoice amount, never recomputed.
+                                For retailers where rewards_reduce_taxable_base = true
+                                (e.g. Kohl's), promos/coupons reduce the taxable base so
+                                actual tax is lower. Use the real invoice number always.
   Layer 2  Gift card savings    face_value_applied - actual_purchase_cost
   Layer 3  Rewards redemption   order.rewards_applied (pro-rated)
   Layer 4  Cashback allocation  cashback_transactions (toggleable, pro-rated)

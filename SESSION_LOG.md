@@ -4,9 +4,9 @@
 
 | | |
 |---|---|
-| **Last Updated** | 2026-06-04 |
-| **Sessions Complete** | S01 → S08 ✓, S8.5 ✓ |
-| **Next Session** | S09 |
+| **Last Updated** | 2026-06-05 |
+| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓ |
+| **Next Session** | S10 |
 | **Phase** | P1 — Week 2 |
 | **GitHub** | theroyalcrate/ResellOS |
 
@@ -16,19 +16,26 @@
 
 ## Start Here — Next Session
 
-### S09 — Barnes Scrapyard Verification + Agent 1B + Gmail/Drive Connection
+### S10 — Phase 3: Variable-Earn Schema + Kohl's Cash Earn Cliff Pin
 
-**Goal:** S08 is complete and verified on Order T487170400 (all 5 layers, $63.95 net economic cost confirmed). S09 has two goals: (1) verify the cost basis engine Layer 3 rewards redemption using the Barnes Scrapyard order ($52.43 rewards redemption, $21.65 out of pocket) — proves the rewards layer works correctly; (2) connect Gmail and Google Drive MCPs, then build Agent 1B to download LEGO invoices, rename to order number format, and file into the correct Drive folder. Also move _test_setup_t487170400.py from repo root to /tests folder.
+**Goal:** Two-part session. (1) Build the variable-earn schema: per-order observed rewards capture (not computed from fixed rates) + Kohl's Cash block model with explicit expiration_date per block. This touches `orders`, `promotional_cash`, and `agent_02_order_entry.py`. Run the resell-os-code-review skill on engine changes before committing. (2) Pin the exact sub-$50 Kohl's Cash earn cliff boundary against the June 8th orders.
 
-1. Connect Gmail MCP and Google Drive MCP in Claude.ai connectors — both personal and business Gmail accounts temporarily
-2. Run cost basis engine against Barnes Scrapyard order — confirm Layer 3 rewards redemption calculates correctly ($52.43 rewards, $21.65 out of pocket)
-3. Build agent_1b_invoice_filing.py — download PDFs from Gmail, rename to order number format, file into Drive folder structure
-4. Move _test_setup_t487170400.py to /tests folder to keep repo root clean
-5. Run S08 minor deferred cleanup sprint — tax_paid_allocated, gwp.settlement_date in Mode 3, dead elif branch, net_economic_cost double calculation
-6. Code review both new files before commit
-7. Commit: "S09: Layer 3 verification, Agent 1B invoice filing, S08 minor fixes" and push
+**Phase 3 schema tasks:**
+1. Migration 012: add `block_identifier` to `promotional_cash` (for xNNNN matching against invoice payment lines). Review whether any other columns are needed for the block model (see kohls.md Schema notes).
+2. `agent_02_order_entry.py` — replace the computed Kohl's rewards section (`_kohls_rewards()`, `_kohls_event_cash()`) with read-from-invoice prompts: capture actual earned amounts from the invoice, not derived from hardcoded constants. Capture expiration window dates for Kohl's Cash blocks and write to `promotional_cash`.
+3. Confirm `orders.kohls_rewards_earned` and `orders.kohls_event_cash_earned` columns exist and stay — but population path changes from compute to capture.
+4. Code review the agent_02 diff before commit (resell-os-code-review skill — look for any path that still derives a reward amount from a rate).
+5. Commit: "S10: Variable-earn schema — read rewards from invoice, Kohl's Cash block model, migration 012"
 
-**Note — email order-confirmation agents:** Separate planned focus. Per-retailer confirmation parsers (LEGO first), then one per retailer, then a general catch-all. Must handle an unbuilt retailer gracefully. CRITICAL: enrich/match existing orders, never duplicate line items (no cross-path idempotency guard exists). Leave buy_reason + purchase_trigger null — agents never guess intent or channel.
+**Kohl's Cash earn cliff pin:**
+- Review June 8th order data to determine the exact sub-$50 threshold
+- Update kohls.md open question when pinned
+- Update `promotional_cash.spend_threshold_amount` on any new blocks recorded
+
+**Also deferred from S09 (original scope — still pending):**
+- Barnes Scrapyard order: verify cost basis engine Layer 3 rewards redemption ($52.43 rewards, $21.65 out of pocket)
+- Agent 1B invoice filing (Gmail/Drive connection + PDF download + rename + file)
+- S08 minor deferred items (tax_paid_allocated, gwp.settlement_date, dead elif, double calculation, _test_setup_t487170400.py → /tests)
 
 ---
 
@@ -47,7 +54,8 @@
 | S8.5 | Intent/channel field split — buy_reason + purchase_trigger refactor. Data cleaned. Code-only (no migration). | ✓ Complete |
 | Pre-S09 (2026-06-01) | Outside VS Code: Obsidian + ResellOS-Knowledge repo setup, PARA vault structure, DECISION 017 added to architecture doc. | ✓ Complete |
 | Pre-S09 (2026-06-03) | Vault content phase: lego.md + lego-instore.md + email-order-matching.md committed to Knowledge vault. GitHub MCP read access confirmed. CONTEXT.md + SESSION_LOG.md corrected. A-007 in CONTEXT.md. | ✓ Complete |
-| S09 | Layer 3 verification + Agent 1B invoice filing + Gmail/Drive connection | → Next |
+| S09 | Kohl's retailer note (5 real orders), tax correction (DECISION 018), migration 011, CONTEXT.md + SESSION_LOG.md updated | ✓ Complete |
+| S10 | Phase 3: variable-earn schema (per-order observed rewards + Kohl's Cash block model) + Kohl's Cash earn cliff pin | → Next |
 
 ---
 
@@ -56,7 +64,7 @@
 **Supabase PostgreSQL — Live**
 
 - **22** tables live
-- Migrations applied through **010**
+- Migrations applied through **011**
 - **5** orders in DB
 - **RLS ON** — every table secured
 - **Multi-user** — user_id on every table
@@ -67,6 +75,29 @@
 ---
 
 ## Session History
+
+### S09 — Kohl's Retailer Note + Tax Correction + Migration 011 ✓ Done — 2026-06-05
+
+**What was done:**
+- Kohl's retailer note (`kohls.md`) committed to ResellOS-Knowledge vault — verified against 5 real orders (6714029349, 6702180930, 6661403431, 6659072095, 6668175554). Note covers: variable earn rate (5–15%, card-independent), Kohl's Cash block model (earn threshold ~$50 post-coupon, block value varies by event), redemption window duration (6–13 days observed), free shipping threshold ($49 post-Kohl's-Cash), cancellation behavior (Kohl's Cash retained; stranded gift card balance is the real risk), gift cards earn normally (unlike Macy's), no GWP observed.
+- **Tax correction (DECISION 018):** Kohl's Cash and coupons are pre-tax discounts (reduce taxable base). Confirmed two independent ways from real invoices. Overturns prior assumption that Kohl's Cash is post-tax tender. `rewards_reduce_taxable_base = true` in the Kohl's profile.
+- Migration 011 applied: added `retailer_key`, `rewards_reduce_taxable_base`, `supports_pickup`, `free_shipping_threshold` columns to `retailer_profiles`. Composite unique constraint `UNIQUE (user_id, retailer_key)` added (idempotent guard). Kohl's profile row seeded.
+- ADR-018 created: `ADR-018-kohls-rewards-pretax-correction.md` — full decision record with evidence, consequences, no-backfill confirmation, Macy's re-check flag.
+- agent_08_cost_basis.py docstring updated: Layer 1 note that `tax_paid` is actual invoice amount, never recomputed; `rewards_reduce_taxable_base = true` means actual tax is lower.
+- CONTEXT.md + SESSION_LOG.md updated: Kohl's retailer row corrected, DECISION 018 added to Architecture Decisions, Open Questions renumbered and updated (Kohl's cancellation, earn cliff, Macy's re-check, agent_08 naming collision added).
+
+**Phase 3 deferred to S10:** Variable-earn schema (per-order observed rewards + Kohl's Cash block model with explicit expiration per block) — touches `orders`, `promotional_cash`, `agent_02`. Code review required before commit.
+
+**Also still deferred (original S09 scope):** Barnes Scrapyard Layer 3 verification, Agent 1B invoice filing, Gmail/Drive connection, S08 minor cleanup items.
+
+**Pre-flight finding:** `retailer_profiles` was empty (no rows for any retailer). `PHASE_1_USER_ID` confirmed as `00000000-0000-0000-0000-000000000001`.
+
+**Commit message:**
+```
+S09: Kohl's tax correction — DECISION 018, migration 011, retailer profile seeded, ADR-018
+```
+
+---
 
 ### Pre-S09 — Vault Content Phase + GitHub MCP Confirmed ✓ Done — 2026-06-03
 
@@ -319,7 +350,13 @@ S04: Fix split payment capture — collect all payment legs, set mixed
 
 **Walmart Business Rewards Basis:** 2% likely on original order value at placement, not final pickup total. Real example: $290 placed, $204 final, $8.40 credited. Confirm from more order data before automating.
 
-**Kohl's Cancellation Cliff Edge:** Confirm from Q4 2025 history whether Kohl's eliminated Kohl's Cash entirely or reduced proportionally when a cancellation crossed the threshold.
+**Kohl's Cancellation Behavior (updated 2026-06-05):** Community sources say Kohl's Cash is *retained* on cancellation (not eliminated). Real risk is stranded gift card balances — must call Kohl's to recover (replacement cards mailed). Verify against a real cancellation if one occurs.
+
+**Kohl's Cash Earn Cliff — exact sub-$50 boundary:** Pin against June 8th orders (S10 task).
+
+**Macy's Star Money pre-tax vs post-tax:** Was bucketed with Kohl's on `rewards_reduce_taxable_base = false` assumption — that assumption just proved wrong for Kohl's. Do not change Macy's flag without a real Macy's invoice. Verify when Macy's note is built.
+
+**agent_08 naming collision:** `agent_08_cost_basis.py` was named after session S08 but conceptual agent numbering calls it "Agent 04," reserving "Agent 08" for Product Catalog. When Product Catalog is built, `agent_08_product_catalog.py` would collide. Decide renaming convention before that session.
 
 **WFS 365-Day Aging Alert — build priority:** WFS storage fee triples at day 366 ($0.75 → $2.25/cu ft/month). New 450+ day tier at $7.50 effective June 30 2026. Aging alert needed before WFS volume grows. 60-day, 30-day, at-threshold alerts. Cubic footage per set from Brickset dimensions.
 
