@@ -1,3 +1,4 @@
+-- Applied via MCP as migration version 20260611041822 (011_invoice_files_ledger) — local file is reference only.
 -- Migration 012: invoice_files ledger for Agent 1B filing tracking
 -- Idempotent (IF NOT EXISTS) — safe if already applied via Supabase MCP.
 --
