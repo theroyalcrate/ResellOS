@@ -1,5 +1,5 @@
 # ResellOS — Claude Context Document
-**Last Updated: 2026-06-04**
+**Last Updated: 2026-06-10**
 **Read this first. This document orients Claude at the start of every conversation.**
 
 > **Document home & sync rule:** The source-of-truth copy lives in the GitHub repo (`theroyalcrate/ResellOS`), edited via Claude Code. An identical copy lives in the Claude project here so chat-Claude starts every conversation current. **When this doc changes: update the repo copy via Claude Code first, then paste the same content into the project copy.** Keep them identical — drift between the two causes re-walking already-completed work.
@@ -54,9 +54,10 @@ Core transactions, cost basis, inventory, and sales always live in the user's ow
 | S08 | Cost basis engine (Agent 04) — 5 layers, 4 costing methods, GWP Philosophy C, verified | ✓ Done |
 | S8.5 | Intent/channel field split — buy_reason + purchase_trigger refactor, data cleaned | ✓ Done |
 | S09 | Kohl's retailer note (5 real orders verified), tax correction (rewards_reduce_taxable_base = true), migration 011, DECISION 018 | ✓ Done |
-| S10 | Phase 3: variable-earn schema (per-order observed rewards + Kohl's Cash block model with explicit expiration) + earn cliff pin against June 8th orders | → Next |
+| Pre-S10 Agent 1B | Agent 1B invoice filing automation — Gmail→Drive→Supabase, 50 unit tests, migration 012, .gitignore UTF-8, OAuth setup. 6 bugs fixed in code review. Needs live test (one real invoice end-to-end). | ✓ Built |
+| S10 | Phase 3: variable-earn schema (per-order observed rewards + Kohl's Cash block model with explicit expiration) + earn cliff pin against June 8th orders + Agent 1B live test | → Next |
 
-**Database state:** 22 tables live, migrations through 011 applied, 5 orders in DB, RLS enabled on all tables.
+**Database state:** 23 tables live, migrations through 012 applied, 5 orders in DB, RLS enabled on all tables.
 
 ---
 
@@ -105,7 +106,8 @@ All 7 retailers have full reward profiles built in Agent 02:
 | LEGO | Insider points (6.5 pts × spend × multiplier), per-set bonuses | Online only, no pickup. supports_pickup = false always. |
 | Barnes & Noble | Stamps = floor(pretax/10) × multiplier | Stamp threshold tracking critical |
 | Kohl's | Variable-rate Rewards Cash (5–15%, card-independent) + event Kohl's Cash (block value varies by event: $10 Sep/Oct, $15 Nov observed) + pickup bonus | rewards_reduce_taxable_base = true (pre-tax discounts, confirmed 5 orders). Earn cliff ~$50 post-coupon. Read amounts from invoice — never compute from a rate. |
-| Macy's | Bronze tier 1pt/$1, Bonus Day overrides, Star Money | Gift cards earn 0 points |
+| Macy's | Bronze tier 1pt/$1, Bonus Day overrides, Star Money + promotional Star Money events ($10 blocks per ~$50) | Gift cards earn 0 points. rewards_reduce_taxable_base = false confirmed 2026-06-07 — Star Money is post-tax tender. |
+| Amazon | No loyalty program. Business account: tax-exempt (resale cert). Occasional delayed shipment 1% credit (Business only, opt-in). Amazon Prime Visa planned Q4 2026 (5% back). | Dual accounts: Business (preferred, tax-exempt) + Personal (fallback, taxable). Account disambiguation: multi-signal (email format, subject language, order number prefix). supports_pickup = false. |
 | Walmart Business | 2% on orders over $250 — calculated on original order value at placement, NOT final total | Pickup orders common |
 | Target | Circle debit card flag, one-off offers manual entry | Pickup supported |
 | Best Buy | Promotional offers manual entry only | Pickup supported |
@@ -232,8 +234,11 @@ Full detail: ResellOS-Knowledge vault at Areas/business-logic/email-order-matchi
 
 ## Planned Future Systems (Not Yet Built)
 
-**S09 — Barnes Scrapyard Verification + Agent 1B**
-Verify cost basis engine Layer 3 (rewards redemption) against Barnes Scrapyard order ($52.43 rewards redemption, $21.65 out of pocket). Then connect Gmail + Google Drive MCPs, build Agent 1B to download, rename, and file invoices into Drive folder structure.
+**Agent 1B — Invoice Filing (Built — Pre-S10 Agent 1B, 2026-06-10)**
+`agents/agent_01b_invoice_filing.py` — Gmail → Drive → Supabase ledger. Three modes: (1) Preview (read-only scan of ResellOS-Invoices label), (2) File one (explicit confirmation), (3) Ledger review. Naming convention: `{order_number}_{RETAILER}_{YYYY-MM-DD}.pdf`, `_ship{N}` for split shipments, `_unmatched/{msg_id}_{RETAILER}_{date}.pdf` for unmatched. Walmart routing: `businessinfo@walmart.com` → `Walmart Business/`, `help@walmart.com` → `Walmart/`. `invoice_files` Supabase ledger (migration 012) provides idempotency and audit trail. 50 unit tests in `tests/test_agent_01b_pure_logic.py`. OAuth: `credentials/token.json` (gitignored). **Pending: live test with one real invoice before broader use.**
+
+**S09 — Barnes Scrapyard Verification (Still Deferred)**
+Verify cost basis engine Layer 3 (rewards redemption) against Barnes Scrapyard order ($52.43 rewards redemption, $21.65 out of pocket).
 
 **Email Order-Confirmation Agents (Planned — next build focus)**
 Per-retailer order-confirmation email parsers, starting with LEGO. CRITICAL: must enrich/match existing orders, not duplicate line items. Leave buy_reason and purchase_trigger null — agents never guess intent or channel.
@@ -287,7 +292,9 @@ Capture screenshots of current reselling software using Claude in Chrome. Annota
 | Discontinuation date | Generalizes is_retiring to all verticals on product_catalog. is_retiring stays on line_items as LEGO operational flag. (Decided 2026-05-31) |
 | Hit list design | Status layer on product_catalog. active → purchased → abandoned. Abandoned preserves history. Notes field = sourcing journal. Purchase Planner consumes as input queue. (Decided 2026-05-31) |
 | Order edit lifecycle & cost basis trigger gate | Order status values: stub → pending_review → confirmed → placed → settled. Cost basis gated behind explicit user confirmation — never auto-runs on a stub or partial order. Email agents fill: order number, retailer, date, line items, GWP flags, totals, rewards earned, CC last 4. Agents never fill: gift_card_last4, buy_reason, purchase_trigger, cashback_rate. Confirmed → atomic write: cost basis + gift card balance debit. Reopening to pending_review reverses the prior balance reduction. Settled → P&L adjustments only, cost basis locked permanently. (DECISION 017, 2026-06-01) |
-| Per-retailer tax behavior (rewards_reduce_taxable_base) | Per-retailer boolean flag, default false. true = promo-cash/coupons are pre-tax discounts that reduce the taxable base; engine must use actual invoice tax, never recompute it. Set only from real invoice evidence — never assumed. Kohl's = true, confirmed from 5 real orders (Sep 2025 – Jun 2026). Corrects prior wrong assumption that Kohl's Cash is post-tax tender. Macy's Star Money was on the same false assumption — must be verified independently against a real Macy's invoice before setting Macy's flag. (DECISION 018, 2026-06-05, supersedes prior Kohl's rewards-tax framing.) |
+| Per-retailer tax behavior (rewards_reduce_taxable_base) | Per-retailer boolean flag, default false. true = promo-cash/coupons are pre-tax discounts that reduce the taxable base; engine must use actual invoice tax, never recompute it. Set only from real invoice evidence — never assumed. Kohl's = true (confirmed 5 orders). Macy's = false (confirmed 2026-06-07 — Star Money is post-tax tender). (DECISION 018, 2026-06-05) |
+| Dual-account retailer architecture | Amazon and Walmart each have Business and Personal accounts with different tax treatment. `retailer_profiles` needs `account_type text DEFAULT 'default'` column + updated unique constraint `UNIQUE (user_id, retailer_key, account_type)`. Will be Migration 013 (012 taken by invoice_files). Affects both Amazon and Walmart — design once, apply to both. |
+| Invoice filing (Agent 1B) | `invoice_files` Supabase ledger (migration 012) keyed on `gmail_message_id` — dedup key, checked before any write. One row per email. Gmail two-stage label move: `ResellOS-Invoices` (intake, `Label_2573281147792874926`) → `ResellOS-Filed` (processed, `Label_1`). Drive path: `Invoices/{Retailer}/{Year}/{Month Year}/`. OAuth credentials in `credentials/` (gitignored). (2026-06-10) |
 
 ---
 
@@ -310,7 +317,7 @@ Questions to answer before year-end:
 3. **Walmart Business rewards basis** — confirm whether 2% calculated on original order value or final total. Real example: $290 placed, $204 final, $8.40 credited.
 4. **Kohl's cancellation behavior (updated 2026-06-05)** — community sources say Kohl's Cash is retained on cancellation (not eliminated). Real risk is **stranded gift card balances**: gift cards are not auto-refunded; must call Kohl's to recover (replacement cards mailed). Verify Kohl's Cash retention against a real cancellation if one occurs.
 5. **Kohl's Cash earn cliff — exact sub-$50 boundary** — earn threshold is just under $50 post-coupon. Exact penny boundary not yet pinned. Pin against June 8th orders (S10 task).
-6. **Macy's Star Money pre-tax vs post-tax** — was on the same false `rewards_reduce_taxable_base = false` assumption as Kohl's, which just proved wrong for Kohl's. Do not change Macy's flag without a real Macy's invoice. Verify when the Macy's retailer note is built.
+6. ~~**Macy's Star Money pre-tax vs post-tax**~~ ✅ RESOLVED 2026-06-07 — `rewards_reduce_taxable_base = false` confirmed. Star Money is post-tax tender; tax computed on full merchandise subtotal even when order paid entirely with Star Money. macys.md built.
 7. **agent_08 naming collision** — `agent_08_cost_basis.py` is named after session S08, but the conceptual agent numbering calls the cost basis engine "Agent 04" and reserves "Agent 08" for the unbuilt Product Catalog Agent (per CONTEXT.md Planned Future Systems). When Product Catalog is built, `agent_08_product_catalog.py` would collide with the existing file. Decide on a renaming convention before that session.
 8. **Brickset API validation** — validate retirement data against Bricktap lists on 20-30 sets before committing as primary sync source.
 9. **LEGO catalog endpoints** — Brick Dynasty creator pulls from LEGO directly. Rewatch episode to confirm approach before Set Reference Agent design session.

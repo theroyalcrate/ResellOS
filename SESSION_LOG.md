@@ -4,9 +4,9 @@
 
 | | |
 |---|---|
-| **Last Updated** | 2026-06-05 |
-| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓ |
-| **Next Session** | S10 |
+| **Last Updated** | 2026-06-10 |
+| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓ |
+| **Next Session** | S10 (variable-earn schema, after CPA meeting) + Agent 1B live test |
 | **Phase** | P1 — Week 2 |
 | **GitHub** | theroyalcrate/ResellOS |
 
@@ -16,25 +16,47 @@
 
 ## Start Here — Next Session
 
-### S10 — Phase 3: Variable-Earn Schema + Kohl's Cash Earn Cliff Pin
+### S10 — Variable-Earn Schema + Agent 1B Live Test *(after June 10 CPA meeting)*
+
+**Step 1 — Agent 1B live test (do this first, takes 5 minutes):**
+- Agent 1B is built and tested (50/50 unit tests passing). Run Mode 1 preview: `python agents/agent_01b_invoice_filing.py` → select 1.
+- Review the queue, confirm one invoice looks right, then run Mode 2 to file one.
+- **Do not file broadly until at least one real invoice is verified end-to-end** (Gmail → Drive → ledger → label transition).
+- Migration 012 (`invoice_files` ledger) is local only — apply it to Supabase before running Mode 2: paste `migrations/012_invoice_files_ledger.sql` into Supabase MCP (or SQL editor) if it hasn't been applied yet.
+
+**Step 2 — CPA meeting takeaways:**
+- Record answers to Q1–Q5 in `Projects/cpa-meeting/cpa-meeting-2026-06-10.md`.
+- Apply gated decisions: ADR-019 (FIFO), cashback layer activation, Capital One chain `gift_cards.price_paid` write path.
+
+**Step 3 — S10 schema work (see S10 section below).**
+
+**Note on Migration 012 numbering:** The local file is `012_invoice_files_ledger.sql` but S10 had planned to use 012 for `account_type` on `retailer_profiles`. The invoice_files migration was applied in Supabase during this session (2026-06-10) and takes 012. The `account_type` migration is now 013, and `block_identifier` is 014.
+
+---
+
+### S10 — Phase 3: Variable-Earn Schema + Kohl's Cash Earn Cliff Pin *(after June 10 CPA meeting)*
 
 **Goal:** Two-part session. (1) Build the variable-earn schema: per-order observed rewards capture (not computed from fixed rates) + Kohl's Cash block model with explicit expiration_date per block. This touches `orders`, `promotional_cash`, and `agent_02_order_entry.py`. Run the resell-os-code-review skill on engine changes before committing. (2) Pin the exact sub-$50 Kohl's Cash earn cliff boundary against the June 8th orders.
 
 **Phase 3 schema tasks:**
-1. Migration 012: add `block_identifier` to `promotional_cash` (for xNNNN matching against invoice payment lines). Review whether any other columns are needed for the block model (see kohls.md Schema notes).
-2. `agent_02_order_entry.py` — replace the computed Kohl's rewards section (`_kohls_rewards()`, `_kohls_event_cash()`) with read-from-invoice prompts: capture actual earned amounts from the invoice, not derived from hardcoded constants. Capture expiration window dates for Kohl's Cash blocks and write to `promotional_cash`.
-3. Confirm `orders.kohls_rewards_earned` and `orders.kohls_event_cash_earned` columns exist and stay — but population path changes from compute to capture.
-4. Code review the agent_02 diff before commit (resell-os-code-review skill — look for any path that still derives a reward amount from a rate).
-5. Commit: "S10: Variable-earn schema — read rewards from invoice, Kohl's Cash block model, migration 012"
+1. Migration 013 (was 012 — bumped by invoice_files): `account_type` column on `retailer_profiles` + updated unique constraint. Seed Amazon Business and Amazon Personal profiles. Seed Walmart Business profile.
+2. Migration 014 (was 013): add `block_identifier` to `promotional_cash` (for xNNNN matching against invoice payment lines). Review whether any other columns are needed for the block model (see kohls.md Schema notes).
+3. `agent_02_order_entry.py` — replace the computed Kohl's rewards section (`_kohls_rewards()`, `_kohls_event_cash()`) with read-from-invoice prompts: capture actual earned amounts from the invoice, not derived from hardcoded constants. Capture expiration window dates for Kohl's Cash blocks and write to `promotional_cash`.
+4. Confirm `orders.kohls_rewards_earned` and `orders.kohls_event_cash_earned` columns exist and stay — but population path changes from compute to capture.
+5. Code review the agent_02 diff before commit (resell-os-code-review skill — look for any path that still derives a reward amount from a rate).
+6. Commit: "S10: Variable-earn schema — read rewards from invoice, Kohl's Cash block model, migrations 013-014"
+
+**CPA-gated decisions to apply in S10:**
+- Q1 (FIFO): write ADR-019, lock `users.costing_method` docs
+- Q2 (cashback treatment): activate or leave off Layer 4, update cashback agent
+- Q5 (Capital One chain): set `gift_cards.price_paid` write path for C1 Shopping → Macy's gift card
 
 **Kohl's Cash earn cliff pin:**
 - Review June 8th order data to determine the exact sub-$50 threshold
 - Update kohls.md open question when pinned
-- Update `promotional_cash.spend_threshold_amount` on any new blocks recorded
 
-**Also deferred from S09 (original scope — still pending):**
+**Still deferred from original S09 scope:**
 - Barnes Scrapyard order: verify cost basis engine Layer 3 rewards redemption ($52.43 rewards, $21.65 out of pocket)
-- Agent 1B invoice filing (Gmail/Drive connection + PDF download + rename + file)
 - S08 minor deferred items (tax_paid_allocated, gwp.settlement_date, dead elif, double calculation, _test_setup_t487170400.py → /tests)
 
 ---
@@ -55,7 +77,9 @@
 | Pre-S09 (2026-06-01) | Outside VS Code: Obsidian + ResellOS-Knowledge repo setup, PARA vault structure, DECISION 017 added to architecture doc. | ✓ Complete |
 | Pre-S09 (2026-06-03) | Vault content phase: lego.md + lego-instore.md + email-order-matching.md committed to Knowledge vault. GitHub MCP read access confirmed. CONTEXT.md + SESSION_LOG.md corrected. A-007 in CONTEXT.md. | ✓ Complete |
 | S09 | Kohl's retailer note (5 real orders), tax correction (DECISION 018), migration 011, CONTEXT.md + SESSION_LOG.md updated | ✓ Complete |
-| S10 | Phase 3: variable-earn schema (per-order observed rewards + Kohl's Cash block model) + Kohl's Cash earn cliff pin | → Next |
+| Pre-S10 (2026-06-07) | Knowledge vault phase 2: CPA prep note, Macy's note, Amazon note. Architecture decision: account_type migration needed for retailer_profiles (Amazon + Walmart). | ✓ Complete |
+| Pre-S10 Agent 1B (2026-06-10) | Agent 1B invoice filing built: pure-logic functions, 50 unit tests, I/O layer (Gmail/Drive/Supabase), migration 012 (invoice_files), .gitignore UTF-8 fix, setup_oauth.py. Code-reviewed — 6 bugs fixed. Needs live test (Mode 1 preview, then Mode 2 one invoice). | ✓ Built, pending live test |
+| S10 | Phase 3: variable-earn schema + account_type migration (013) + Kohl's Cash block model (014) + CPA-gated decisions applied + Agent 1B live test | ⏳ After CPA |
 
 ---
 
@@ -63,8 +87,8 @@
 
 **Supabase PostgreSQL — Live**
 
-- **22** tables live
-- Migrations applied through **011**
+- **23** tables live (invoice_files added — migration 012 applied 2026-06-10)
+- Migrations applied through **012**
 - **5** orders in DB
 - **RLS ON** — every table secured
 - **Multi-user** — user_id on every table
@@ -75,6 +99,58 @@
 ---
 
 ## Session History
+
+### Pre-S10 Agent 1B — Invoice Filing Automation ✓ Built — 2026-06-10
+
+**What was built:**
+- **`.gitignore`** — rewrote from scratch as clean UTF-8 (was UTF-16 with NUL bytes; last line was corrupted, merging `*.log` and `mcp.json`). Added `credentials/` section for OAuth tokens.
+- **`setup_oauth.py`** (repo root, tracked) — one-time Gmail + Drive OAuth setup script. Paths point to `credentials/` (gitignored). Run once, generates `credentials/token.json`.
+- **`migrations/012_invoice_files_ledger.sql`** — idempotent `IF NOT EXISTS`. Schema: `id uuid PK`, `user_id uuid NOT NULL`, `gmail_message_id text UNIQUE NOT NULL`, `drive_file_id text`, `order_id uuid FK→orders ON DELETE SET NULL`, `retailer text`, `filed_filename text`, `filed_at timestamptz`, `created_at timestamptz DEFAULT now()`. RLS enabled with DO $$ guard. **Note:** This takes migration 012; the planned `account_type` column migration for `retailer_profiles` is now 013.
+- **`agents/agent_01b_invoice_filing.py`** — invoice filing agent. Three modes: (1) Preview (read-only scan), (2) File one (explicit confirmation per invoice), (3) Ledger review. A-007 Tier 1 order matching. Gmail label two-stage move: `ResellOS-Invoices` → `ResellOS-Filed`. Walmart routing rule §7.5: `businessinfo@walmart.com` → `Walmart Business/`.
+- **`tests/test_agent_01b_pure_logic.py`** — 50 unit tests, all pure-logic (no network/DB/API). 50/50 passing.
+
+**Code review — 6 bugs fixed before commit:**
+1. WALMART_BUSINESS key mismatch: `_SENDER_RETAILER` used underscore key (`WALMART_BUSINESS`) but `RETAILER_DRIVE_FOLDER` used space key (`WALMART BUSINESS`) — unmatched Walmart Business emails routed to a `"Walmart_Business"` folder that doesn't exist. Fixed: aligned key to `"WALMART BUSINESS"` with space.
+2. Shipment count off-by-one: `max(shipment_count, 1)` should be `shipment_count + 1`. A second shipment would have been named `_ship1` (colliding with existing), not `_ship2`.
+3. Unmatched + multi-PDF crash: `build_filename(None, ...)` for unmatched invoices with 2+ PDFs produced `None_RETAILER_date_ship2.pdf`. Fixed: separate branch for matched vs unmatched multi-PDF.
+4. mode_file "0" bug: `plans[int("0") - 1]` = `plans[-1]` (last item) silently. Fixed: explicit `1 <= idx <= len(plans)` guard.
+5. Drive pagination miss: `_find_folder` only read first page of results — existing folder silently missed → duplicate created. Fixed: server-side `name = '{name}'` filter in query.
+6. list_intake_messages 50-message hard cap: changed to paginated loop (maxResults=100 + nextPageToken).
+
+**Pending — do before broad use:**
+- Apply migration 012 to Supabase (paste `migrations/012_invoice_files_ledger.sql` in SQL editor or Supabase MCP) if not already done.
+- Run Mode 1 preview, review the queue.
+- Run Mode 2 to file one invoice. Verify: (a) PDF in Drive at correct path, (b) ledger row in `invoice_files`, (c) message label changed to `ResellOS-Filed`.
+- User said: "Ask me before processing any real emails — test on one or two first."
+
+**OAuth credentials confirmed (2026-06-10/11):**
+- `credentials/credentials.json` — gitignored, not committed
+- `credentials/token.json` — gitignored, generated by `setup_oauth.py` which was run successfully
+- Scopes: `gmail.modify` + `drive`
+
+**Commit message to use:**
+```
+Pre-S10 Agent 1B: invoice filing — pure logic + I/O + 50 tests, migration 012, .gitignore UTF-8 fix
+```
+
+---
+
+### Pre-S10 — Knowledge Vault Phase 2 ✓ Done — 2026-06-07
+
+**What was done:**
+- **CPA prep note** (`Projects/cpa-meeting/cpa-meeting-2026-06-10.md`) — all 5 questions documented with current system state, downstream build impact, and a post-meeting answer table. Three build gates called out: Q1 (FIFO), Q2 (cashback treatment), Q5 (Capital One chain).
+- **Macy's retailer note** (`Areas/retailers/macys.md`) — verified against 2 real orders (4660889947 Nov 2025 pickup, 4697809433 Dec 2025 ship+cancel). Key findings: (1) `rewards_reduce_taxable_base = false` confirmed — Star Money is post-tax tender; tax computed on full merchandise subtotal even when order paid entirely with Star Money. Closes open question OQ#6. (2) Dual reward mechanism: regular points (1pt/$1 → 1000pts = $10 Star Money) + promotional Star Money events ($10 blocks per ~$50 spend, same cliff structure as Kohl's Cash). (3) Order detail page is the worst parsing surface confirmed — no payment tender breakdown, no reward earn details; high human-input dependency for email agent. (4) Partial cancellation observed: Dec 17 order had Leviathan Qty 3 cancelled Dec 19, Iron Man Qty 4 delivered. (5) Gift cards earn 0 points (unlike Kohl's). (6) Holiday return window closes Jan 31 on both Nov and Dec orders.
+- **Amazon retailer note** (`Areas/retailers/amazon.md`) — verified against 3 real orders (2 Business, 1 Personal). Key findings: (1) Dual account setup: Business (preferred, tax-exempt via resale cert) and Personal (fallback, taxable). (2) Account disambiguation is multi-signal — email format/subject language + invoice layout + order number prefix (112- Business, 114- Personal observed) + tax; no single signal sufficient; conflicts → flag for human review. (3) Tax exemption covers all purchases including third-party sellers; Amazon remits. Exemption is intentionally toggleable (shipping supplies want tax). (4) Amazon Business occasional delayed shipment reward: 1% opt-in at checkout for 1–3 day delay — offered inconsistently, must be prompted at order entry, track in `rewards_transactions`. (5) Quantity limits: ~9 units at discount price, ~60 at full retail. (6) Two clean invoice formats (Business "Final Details" table, Personal "Order Summary" card). (7) No loyalty program, no cashback portal. Amazon Prime Visa planned Q4 2026 (5% back).
+
+**Architecture decision (unresolved — gates Migration 012):**
+- `retailer_profiles` needs `account_type text DEFAULT 'default'` column + updated unique constraint `UNIQUE (user_id, retailer_key, account_type)`. Required for Amazon (Business/Personal) AND Walmart (Business/personal). Design once in Migration 012, apply to both before seeding either profile.
+
+**Knowledge vault files committed:**
+- `C:\ResellOS-Knowledge\ResellOS-Knowledge\Projects\cpa-meeting\cpa-meeting-2026-06-10.md`
+- `C:\ResellOS-Knowledge\ResellOS-Knowledge\Areas\retailers\macys.md`
+- `C:\ResellOS-Knowledge\ResellOS-Knowledge\Areas\retailers\amazon.md`
+
+---
 
 ### S09 — Kohl's Retailer Note + Tax Correction + Migration 011 ✓ Done — 2026-06-05
 
@@ -354,7 +430,11 @@ S04: Fix split payment capture — collect all payment legs, set mixed
 
 **Kohl's Cash Earn Cliff — exact sub-$50 boundary:** Pin against June 8th orders (S10 task).
 
-**Macy's Star Money pre-tax vs post-tax:** Was bucketed with Kohl's on `rewards_reduce_taxable_base = false` assumption — that assumption just proved wrong for Kohl's. Do not change Macy's flag without a real Macy's invoice. Verify when Macy's note is built.
+**~~Macy's Star Money pre-tax vs post-tax~~** ✅ RESOLVED 2026-06-07: Star Money is post-tax tender (`rewards_reduce_taxable_base = false`). Confirmed from Dec 17, 2025 order paid entirely with Star Money — tax computed at 10.39% on full merchandise subtotal. macys.md note built with evidence.
+
+**Amazon + Walmart dual-account architecture (new 2026-06-07):** `retailer_profiles` needs `account_type text DEFAULT 'default'` column + updated unique constraint `UNIQUE (user_id, retailer_key, account_type)`. Required for Amazon (Business/Personal) AND Walmart (Business/personal). Will be Migration 012 in S10. Design once, apply to both before seeding either profile.
+
+**Amazon Business delayed shipment reward:** 1% credit offered occasionally at checkout for accepting 1–3 day delivery delay. Offered inconsistently — must be prompted at order entry. Capture in `rewards_transactions`. Redemption path on future invoices not yet documented.
 
 **agent_08 naming collision:** `agent_08_cost_basis.py` was named after session S08 but conceptual agent numbering calls it "Agent 04," reserving "Agent 08" for Product Catalog. When Product Catalog is built, `agent_08_product_catalog.py` would collide. Decide renaming convention before that session.
 
