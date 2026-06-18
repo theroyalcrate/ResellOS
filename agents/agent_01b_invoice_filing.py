@@ -1,15 +1,41 @@
 """
-ResellOS - Agent 01B: Invoice Filing
-=====================================
-Downloads invoice PDFs from Gmail (label: ResellOS-Invoices), renames them
-to the project naming convention, files them into the business Drive folder
-structure, and records each filing in the invoice_files ledger.
+ResellOS - Agent 01B: Invoice Filing (Business + Personal Gmail)
+================================================================
+Three-part agent that consolidates business invoice filing and personal
+Gmail historical backfill into a single script.
 
-Mode 1 — Preview  : scan ResellOS-Invoices, show proposed filename + folder
-                    for each pending message. No writes.
-Mode 2 — File one : pick one pending invoice from the preview list and file it.
-                    Asks for confirmation before every write.
-Mode 3 — Ledger   : show the invoice_files table (what has already been filed).
+Part 1 — Business Gmail filing (Modes 1-3, ongoing):
+  Downloads PDF invoices from business Gmail (label: ResellOS-Invoices),
+  renames them, files them into the business Drive folder structure, and
+  records each filing in the invoice_files ledger. Moves the email label
+  from ResellOS-Invoices → ResellOS-Filed on success.
+
+Part 2 — Personal Gmail backfill (Mode 4, one-time / safe to re-run):
+  Searches personal Gmail for LEGO invoice emails (from e.lego.com with
+  attachments) not yet labeled ResellOS-Processed. Copies each match to
+  business Gmail under the ResellOS-Invoices label so Part 1 picks it up
+  on the next run. Labels the personal copy ResellOS-Processed so re-runs
+  don't reprocess the same email.
+
+Part 3 — Personal safety-net filter (Mode 5, one-time setup):
+  Creates a Gmail filter on the personal account that applies the label
+  ResellOS-Needs-Copy to any new email from e.lego.com. The P0 forwarding
+  rule handles most new LEGO invoices; this filter catches any that slip
+  through to personal. Mode 4 picks them up on its next run.
+
+Modes:
+  1 — Preview       : scan business ResellOS-Invoices, show filing plan, no writes
+  2 — File one      : pick one pending invoice and file it (business Gmail → Drive)
+  3 — Ledger        : show invoice_files history
+  4 — Personal backfill : copy unprocessed personal LEGO emails to business Gmail
+  5 — Safety filter : create personal Gmail filter for e.lego.com emails
+
+Authentication:
+  credentials/token_business.json   gmail.modify + drive (business account)
+  credentials/token_personal.json   gmail.modify + gmail.settings.basic (personal)
+  Run setup_oauth.py once to generate both tokens.
+  Legacy credentials/token.json is recognized and used if token_business.json
+  is absent (pre-S10 setup — re-run setup_oauth.py to migrate properly).
 
 Naming convention (§3):
   {order_number}_{RETAILER}_{YYYY-MM-DD}.pdf
@@ -20,12 +46,11 @@ Walmart routing rule (§7.5):
   businessinfo@walmart.com → Walmart Business/
   help@walmart.com         → Walmart/
 
-Idempotency (§5): gmail_message_id checked against invoice_files before any
-write. Belt-and-suspenders against a label transition that failed silently.
-
-Auth: credentials/token.json — run setup_oauth.py once to generate it.
-
-Usage: python agents/agent_01b_invoice_filing.py
+Idempotency (§5):
+  Part 1: gmail_message_id checked against invoice_files before any write.
+  Part 2: ResellOS-Processed label on personal copy + rfc822msgid search on
+          business Gmail — prevents duplicate copies even if personal labeling
+          failed on a prior run.
 """
 
 import base64
@@ -42,7 +67,6 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
-# db_client lives at project root, one level up from agents/
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from db_client import get_client, PHASE_1_USER_ID
 
@@ -51,17 +75,39 @@ from db_client import get_client, PHASE_1_USER_ID
 # Constants
 # --------------------------------------------------------------------------- #
 
-SCOPES = [
+_CREDS_DIR = Path(__file__).parent.parent / "credentials"
+
+# Business account: gmail.modify + Drive
+TOKEN_BUSINESS_PATH = _CREDS_DIR / "token_business.json"
+TOKEN_LEGACY_PATH   = _CREDS_DIR / "token.json"          # pre-S10 name
+
+BUSINESS_SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/drive",
 ]
 
-_CREDS_DIR = Path(__file__).parent.parent / "credentials"
-TOKEN_PATH = _CREDS_DIR / "token.json"
+# Personal account: gmail.modify + settings (needed for filter creation)
+TOKEN_PERSONAL_PATH = _CREDS_DIR / "token_personal.json"
 
+PERSONAL_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/gmail.settings.basic",
+]
+
+# Business Gmail label IDs (Part 1)
 GMAIL_INTAKE_LABEL_ID = "Label_2573281147792874926"  # ResellOS-Invoices
 GMAIL_FILED_LABEL_ID  = "Label_1"                    # ResellOS-Filed
-DRIVE_ROOT_FOLDER     = "Invoices"
+
+DRIVE_ROOT_FOLDER = "Invoices"
+
+# Personal Gmail labels (Part 2 and 3)
+PERSONAL_PROCESSED_LABEL  = "ResellOS-Processed"    # marks personal copy as copied
+PERSONAL_NEEDS_COPY_LABEL = "ResellOS-Needs-Copy"   # applied by safety-net filter
+
+# Gmail search for LEGO invoice emails in personal account.
+# Matches only emails with attachments — avoids copying order confirmations
+# that have no PDFs and would create noise in the business queue.
+PERSONAL_LEGO_QUERY = "from:(e.lego.com) has:attachment"
 
 # Normalized orders.retailer → Drive subfolder name
 RETAILER_DRIVE_FOLDER: dict[str, str] = {
@@ -81,7 +127,7 @@ RETAILER_DRIVE_FOLDER: dict[str, str] = {
 }
 
 # Ordered list of (sender-fragment, retailer-key) for unmatched-path routing.
-# Checked with `fragment in sender_email` so more-specific entries come first.
+# More-specific entries first.
 _SENDER_RETAILER: list[tuple[str, str]] = [
     ("businessinfo@walmart.com", "WALMART BUSINESS"),
     ("help@walmart.com",         "WALMART"),
@@ -246,26 +292,61 @@ def get_yes_no(prompt, default="n"):
 # OAuth / service setup
 # --------------------------------------------------------------------------- #
 
-def _load_creds() -> Credentials:
-    if not TOKEN_PATH.exists():
-        print(f"  ERROR: {TOKEN_PATH} not found. Run setup_oauth.py first.")
-        sys.exit(1)
-    creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
-    if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
+def _load_creds(token_path: Path, scopes: list[str]) -> Optional[Credentials]:
+    """Load, refresh-if-needed, and persist credentials from token_path."""
+    if not token_path.exists():
+        return None
+    creds = Credentials.from_authorized_user_file(str(token_path), scopes)
+    if not creds.valid:
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            token_path.write_text(creds.to_json())
+        else:
+            # Token expired with no refresh_token (revoked or never issued).
+            # Return None so callers surface a clear error instead of
+            # building an API service that fails on the first API call.
+            return None
     return creds
 
 
-def build_services():
-    """Return (gmail_service, drive_service). Refreshes token if expired."""
-    creds = _load_creds()
+def build_business_services():
+    """Return (gmail_business, drive_business). Uses token_business.json."""
+    # Accept legacy token.json if token_business.json hasn't been created yet
+    token_path = TOKEN_BUSINESS_PATH
+    if not TOKEN_BUSINESS_PATH.exists() and TOKEN_LEGACY_PATH.exists():
+        print(
+            "  NOTE: Using legacy token.json for business account. "
+            "Re-run setup_oauth.py to migrate to token_business.json."
+        )
+        token_path = TOKEN_LEGACY_PATH
+
+    creds = _load_creds(token_path, BUSINESS_SCOPES)
+    if not creds:
+        print(f"  ERROR: Business token not found at {token_path}")
+        print("  Run: python setup_oauth.py --business")
+        sys.exit(1)
+
     gmail = build("gmail", "v1", credentials=creds)
     drive = build("drive", "v3", credentials=creds)
     return gmail, drive
 
 
+def build_personal_gmail():
+    """Return personal gmail service. Uses token_personal.json."""
+    creds = _load_creds(TOKEN_PERSONAL_PATH, PERSONAL_SCOPES)
+    if not creds:
+        print(f"  ERROR: Personal token not found at {TOKEN_PERSONAL_PATH}")
+        print("  Run: python setup_oauth.py --personal")
+        print()
+        print("  If setup fails with a scope error, add these scopes in Google Cloud Console:")
+        print("  APIs & Services → OAuth consent screen → Data Access:")
+        print("    gmail.modify, gmail.settings.basic, drive.file")
+        sys.exit(1)
+    return build("gmail", "v1", credentials=creds)
+
+
 # --------------------------------------------------------------------------- #
-# Gmail I/O
+# Gmail I/O — Business (Part 1)
 # --------------------------------------------------------------------------- #
 
 def list_intake_messages(gmail) -> list[dict]:
@@ -273,8 +354,8 @@ def list_intake_messages(gmail) -> list[dict]:
     page_token = None
     while True:
         kwargs: dict = {
-            "userId":   "me",
-            "labelIds": [GMAIL_INTAKE_LABEL_ID],
+            "userId":     "me",
+            "labelIds":   [GMAIL_INTAKE_LABEL_ID],
             "maxResults": 100,
         }
         if page_token:
@@ -351,6 +432,123 @@ def transition_label(gmail, msg_id: str) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Gmail I/O — Personal (Part 2 and 3)
+# --------------------------------------------------------------------------- #
+
+def get_or_create_label(gmail, label_name: str) -> str:
+    """Return the ID of a Gmail label, creating it if it doesn't exist."""
+    result = gmail.users().labels().list(userId="me").execute()
+    for label in result.get("labels", []):
+        if label["name"] == label_name:
+            return label["id"]
+    created = gmail.users().labels().create(
+        userId="me", body={"name": label_name}
+    ).execute()
+    return created["id"]
+
+
+def get_rfc822_message_id(msg: dict) -> str:
+    """Extract the RFC 2822 Message-ID from a full message's headers."""
+    headers = {
+        h["name"].lower(): h["value"]
+        for h in msg.get("payload", {}).get("headers", [])
+    }
+    return headers.get("message-id", "")
+
+
+def message_exists_in_business(gmail_business, rfc822_message_id: str) -> bool:
+    """
+    Check whether a message with this RFC 2822 Message-ID already exists in
+    business Gmail. Used as belt-and-suspenders to prevent duplicate inserts
+    when a prior run's personal-labeling step failed after a successful copy.
+    """
+    if not rfc822_message_id:
+        return False
+    # Normalise: ensure the ID is wrapped in angle brackets for Gmail search.
+    # Bare colons or spaces in the local part can break the query grammar when
+    # the ID is passed unquoted; the <...> form is what Gmail expects.
+    msg_id = rfc822_message_id.strip()
+    if not msg_id.startswith("<"):
+        msg_id = f"<{msg_id}>"
+    result = gmail_business.users().messages().list(
+        userId="me",
+        q=f"rfc822msgid:{msg_id}",
+        maxResults=1,
+    ).execute()
+    return bool(result.get("messages"))
+
+
+def search_personal_lego_emails(gmail_personal) -> list[dict]:
+    """
+    Return message stubs from personal Gmail matching PERSONAL_LEGO_QUERY.
+    The ResellOS-Processed exclusion is done via label ID after fetching,
+    because Gmail search only supports label names (which may vary by account).
+    The caller handles the processed-label filter.
+    """
+    stubs: list[dict] = []
+    page_token = None
+    while True:
+        kwargs: dict = {
+            "userId":     "me",
+            "q":          PERSONAL_LEGO_QUERY,
+            "maxResults": 100,
+        }
+        if page_token:
+            kwargs["pageToken"] = page_token
+        result = gmail_personal.users().messages().list(**kwargs).execute()
+        stubs.extend(result.get("messages", []))
+        page_token = result.get("nextPageToken")
+        if not page_token:
+            break
+    return stubs
+
+
+def copy_message_to_business_gmail(
+    gmail_personal,
+    gmail_business,
+    personal_msg_id: str,
+    intake_label_id: str,
+) -> Optional[str]:
+    """
+    Export the raw RFC 2822 message from personal Gmail, insert it into
+    business Gmail with the ResellOS-Invoices label applied at insert time.
+    Returns the new business Gmail message ID, or None on failure.
+    """
+    raw_response = gmail_personal.users().messages().get(
+        userId="me", id=personal_msg_id, format="raw"
+    ).execute()
+    raw_b64 = raw_response.get("raw", "")
+    if not raw_b64:
+        return None
+
+    # Compute exact padding needed: Gmail's format=raw uses unpadded base64.
+    # Adding "==" unconditionally corrupts messages when len(raw_b64) % 4 == 3
+    # (the extra "=" produces length % 4 == 1 which is structurally invalid).
+    raw_bytes = base64.urlsafe_b64decode(raw_b64 + "=" * (-len(raw_b64) % 4))
+
+    inserted = gmail_business.users().messages().insert(
+        userId="me",
+        body={"labelIds": [intake_label_id]},
+        internalDateSource="dateHeader",
+        media_body=MediaIoBaseUpload(
+            io.BytesIO(raw_bytes),
+            mimetype="message/rfc822",
+            resumable=False,
+        ),
+    ).execute()
+    return inserted.get("id")
+
+
+def apply_label_to_message(gmail, msg_id: str, label_id: str) -> None:
+    """Add a label to a Gmail message (non-destructive)."""
+    gmail.users().messages().modify(
+        userId="me",
+        id=msg_id,
+        body={"addLabelIds": [label_id]},
+    ).execute()
+
+
+# --------------------------------------------------------------------------- #
 # Drive I/O
 # --------------------------------------------------------------------------- #
 
@@ -359,7 +557,7 @@ def _find_folder(drive, name: str, parent_id: str) -> Optional[str]:
     Return the ID of the first folder matching name under parent_id.
     The name filter in the query is server-side — avoids pagination misses
     when a parent folder has many children. Client-side strip comparison is
-    kept as a safety net for the trailing-space folder names (§2).
+    kept as a safety net for trailing-space folder names.
     """
     name_q = name.strip().replace("'", "\\'")
     q = (
@@ -501,13 +699,13 @@ def build_filing_plan(meta: dict, client) -> dict:
         retailer_folder = resolve_retailer_folder(order["retailer"], sender_email)
         order_date_str  = order["order_date"]
         shipment_count  = count_shipments(order["order_id"], client)
-        next_shipment   = shipment_count + 1  # first new PDF is ship(N+1)
+        next_shipment   = shipment_count + 1
         filename        = build_filename(
             order_number, retailer_key, order_date_str, shipment_num=next_shipment
         )
         folder_path = resolve_drive_folder_path(retailer_folder, order_date_str)
-        matched       = True
-        order_id      = order["order_id"]
+        matched     = True
+        order_id    = order["order_id"]
     else:
         retailer_key    = detect_retailer_from_sender(sender_email)
         retailer_folder = RETAILER_DRIVE_FOLDER.get(retailer_key, retailer_key.title())
@@ -515,6 +713,7 @@ def build_filing_plan(meta: dict, client) -> dict:
         folder_path     = resolve_unmatched_folder_path(retailer_folder)
         matched         = False
         order_id        = None
+        next_shipment   = 1
 
     return {
         "msg_id":          msg_id,
@@ -528,13 +727,12 @@ def build_filing_plan(meta: dict, client) -> dict:
         "filename":        filename,
         "folder_path":     folder_path,
         "matched":         matched,
-        # next_shipment: only meaningful when matched=True; shipment_count + 1
-        "next_shipment":   next_shipment if matched else 1,
+        "next_shipment":   next_shipment,
     }
 
 
 # --------------------------------------------------------------------------- #
-# Mode 1 — Preview (read-only)
+# Mode 1 — Preview (read-only, Part 1)
 # --------------------------------------------------------------------------- #
 
 def mode_preview(gmail, client) -> list[dict]:
@@ -586,7 +784,7 @@ def mode_preview(gmail, client) -> list[dict]:
 
 
 # --------------------------------------------------------------------------- #
-# Mode 2 — File one invoice
+# Mode 2 — File one invoice (Part 1)
 # --------------------------------------------------------------------------- #
 
 def _execute_filing(plan: dict, gmail, drive, client) -> bool:
@@ -627,7 +825,6 @@ def _execute_filing(plan: dict, gmail, drive, client) -> bool:
     for idx, pdf in enumerate(pdfs, 1):
         if len(pdfs) > 1:
             if plan["matched"]:
-                # Numbered from next_shipment so we don't collide with existing files
                 ship_num = plan["next_shipment"] + (idx - 1)
                 filename = build_filename(
                     plan["order_number"],
@@ -636,7 +833,6 @@ def _execute_filing(plan: dict, gmail, drive, client) -> bool:
                     shipment_num=ship_num,
                 )
             else:
-                # Unmatched multi-PDF: base name for first, _ship{N} suffix for extras
                 base = build_unmatched_filename(
                     msg_id, plan["retailer_key"], plan["date_str"]
                 )
@@ -655,8 +851,6 @@ def _execute_filing(plan: dict, gmail, drive, client) -> bool:
         if idx == 1:
             first_drive_id = drive_file_id
 
-    # One ledger row per email message (keyed on gmail_message_id).
-    # first_drive_id points to the primary (or only) PDF.
     ok = record_filing(
         msg_id, first_drive_id, plan["order_id"],
         plan["retailer_key"], plan["filename"], client,
@@ -670,7 +864,6 @@ def _execute_filing(plan: dict, gmail, drive, client) -> bool:
         transition_label(gmail, msg_id)
         print("  OK: Label → ResellOS-Filed")
     except Exception as e:
-        # File is safe in Drive; label failure is recoverable manually.
         print(f"  WARNING: Label transition failed ({e}). Update label manually.")
 
     return True
@@ -720,7 +913,7 @@ def mode_file(plans: list[dict], gmail, drive, client) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Mode 3 — Ledger review
+# Mode 3 — Ledger review (Part 1)
 # --------------------------------------------------------------------------- #
 
 def mode_ledger(client) -> None:
@@ -753,6 +946,206 @@ def mode_ledger(client) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Mode 4 — Personal Gmail historical backfill (Part 2)
+# --------------------------------------------------------------------------- #
+
+def mode_personal_backfill(gmail_personal, gmail_business) -> None:
+    """
+    Copy unprocessed LEGO invoice emails from personal Gmail to business Gmail.
+    Idempotency:
+      - Primary guard:  ResellOS-Processed label on personal copy (set after copy)
+      - Secondary guard: rfc822msgid search on business Gmail (catches the case
+        where copy succeeded but personal labeling failed on a prior run — skips
+        the duplicate insert and retries only the labeling)
+    """
+    print("\n" + "=" * 70)
+    print("  PERSONAL GMAIL BACKFILL")
+    print("  Copy LEGO invoice emails → business Gmail (ResellOS-Invoices)")
+    print("=" * 70)
+
+    print(f"\n  Ensuring '{PERSONAL_PROCESSED_LABEL}' label exists on personal account...")
+    processed_label_id = get_or_create_label(gmail_personal, PERSONAL_PROCESSED_LABEL)
+    print(f"  Label ID: {processed_label_id}")
+
+    print(f"\n  Searching personal Gmail for: {PERSONAL_LEGO_QUERY}")
+    all_stubs = search_personal_lego_emails(gmail_personal)
+    print(f"  Found {len(all_stubs)} matching message(s). Filtering for unprocessed...")
+
+    # Filter out messages that already carry the ResellOS-Processed label.
+    # Include Message-ID in metadataHeaders so we don't need a second full-format
+    # fetch later — the rfc822 Message-ID is available from this single call.
+    unprocessed_stubs: list[dict] = []
+    for stub in all_stubs:
+        try:
+            meta_msg = gmail_personal.users().messages().get(
+                userId="me", id=stub["id"], format="metadata",
+                metadataHeaders=["Subject", "From", "Date", "Message-ID"],
+            ).execute()
+            label_ids = meta_msg.get("labelIds", [])
+            if processed_label_id in label_ids:
+                continue
+            unprocessed_stubs.append({**stub, "_meta": meta_msg})
+        except Exception as e:
+            print(f"  WARNING: Could not check labels for {stub['id']}: {e} — skipping")
+
+    print(f"  {len(unprocessed_stubs)} unprocessed email(s) to copy.\n")
+
+    if not unprocessed_stubs:
+        print("  Nothing to backfill — all matching emails already processed.")
+        return
+
+    found       = len(unprocessed_stubs)
+    copied      = 0
+    skipped_dup = 0
+    failed      = 0
+
+    for stub in unprocessed_stubs:
+        personal_msg_id = stub["id"]
+        meta_msg        = stub["_meta"]
+
+        # Extract subject for display (already fetched in metadata above)
+        meta_headers = {
+            h["name"].lower(): h["value"]
+            for h in meta_msg.get("payload", {}).get("headers", [])
+        }
+        subject_short = meta_headers.get("subject", personal_msg_id)[:55]
+
+        # Message-ID was requested in metadataHeaders above — no second fetch needed
+        rfc822_id = get_rfc822_message_id(meta_msg)
+
+        # Belt-and-suspenders: already in business Gmail?
+        already_in_biz = message_exists_in_business(gmail_business, rfc822_id)
+        if already_in_biz:
+            print(f"  SKIP (already in business): {subject_short}")
+            # Retry labeling the personal copy — it was missed on a prior run
+            try:
+                apply_label_to_message(gmail_personal, personal_msg_id, processed_label_id)
+            except Exception as e:
+                print(f"    WARNING: Could not apply ResellOS-Processed label: {e}")
+            skipped_dup += 1
+            continue
+
+        # Copy raw message to business Gmail with ResellOS-Invoices label
+        print(f"  Copying: {subject_short}")
+        try:
+            new_biz_id = copy_message_to_business_gmail(
+                gmail_personal, gmail_business,
+                personal_msg_id, GMAIL_INTAKE_LABEL_ID,
+            )
+        except Exception as e:
+            print(f"    ERROR copying to business Gmail: {e}")
+            failed += 1
+            continue
+
+        if not new_biz_id:
+            print("    ERROR: Insert returned no message ID.")
+            failed += 1
+            continue
+
+        print(f"    → Business Gmail message ID: {new_biz_id}")
+
+        # Label personal copy as processed (only after successful business insert)
+        try:
+            apply_label_to_message(gmail_personal, personal_msg_id, processed_label_id)
+            print("    → Personal copy labeled ResellOS-Processed")
+        except Exception as e:
+            print(f"    WARNING: Personal labeling failed ({e}).")
+            print("    The email is safely in business Gmail.")
+            print("    On next run, the rfc822msgid check will detect it and retry labeling.")
+
+        copied += 1
+
+    print()
+    print("-" * 70)
+    print(
+        f"  Summary: {found} found | {copied} copied to business | "
+        f"{skipped_dup} already there | {failed} failed"
+    )
+    if copied > 0:
+        print(f"\n  {copied} invoice(s) are now in business Gmail under ResellOS-Invoices.")
+        print("  Run Mode 1 (Preview) to review them, then Mode 2 (File one) to file.")
+    if failed > 0:
+        print(f"\n  {failed} message(s) failed — check errors above and re-run.")
+
+
+# --------------------------------------------------------------------------- #
+# Mode 5 — Personal Gmail safety-net filter (Part 3)
+# --------------------------------------------------------------------------- #
+
+def mode_create_safety_filter(gmail_personal) -> None:
+    """
+    Create a Gmail filter on the personal account that labels any new email
+    from e.lego.com with ResellOS-Needs-Copy. Mode 4 picks those up on its
+    next run. This is a safety net only — the P0 forwarding rule handles
+    most new LEGO invoices at the domain level.
+    """
+    print("\n" + "=" * 70)
+    print("  PERSONAL GMAIL SAFETY-NET FILTER")
+    print("=" * 70)
+    print()
+    print(f"  Creates a filter on your PERSONAL Gmail account:")
+    print(f"  From: e.lego.com  →  label '{PERSONAL_NEEDS_COPY_LABEL}'")
+    print()
+    print("  This catches any LEGO invoices that slip through to personal Gmail")
+    print("  instead of routing to business via the P0 forwarding rule.")
+    print("  Run Mode 4 periodically to copy flagged emails to business Gmail.")
+    print()
+
+    if not get_yes_no("Create this filter now?", default="y"):
+        print("  Cancelled.")
+        return
+
+    print(f"\n  Ensuring '{PERSONAL_NEEDS_COPY_LABEL}' label exists...")
+    try:
+        needs_copy_label_id = get_or_create_label(gmail_personal, PERSONAL_NEEDS_COPY_LABEL)
+        print(f"  Label ID: {needs_copy_label_id}")
+    except Exception as e:
+        print(f"  ERROR creating label: {e}")
+        return
+
+    # Check whether this exact filter already exists
+    try:
+        existing = gmail_personal.users().settings().filters().list(userId="me").execute()
+        for f in existing.get("filter", []):
+            criteria = f.get("criteria", {})
+            action   = f.get("action", {})
+            if (
+                criteria.get("from") == "e.lego.com"
+                and needs_copy_label_id in action.get("addLabelIds", [])
+            ):
+                print("  Filter already exists — nothing to do.")
+                return
+    except Exception as e:
+        print(f"  WARNING: Could not list existing filters ({e}). Attempting to create anyway.")
+
+    filter_body = {
+        "criteria": {"from": "e.lego.com"},
+        "action":   {"addLabelIds": [needs_copy_label_id]},
+    }
+
+    try:
+        result = gmail_personal.users().settings().filters().create(
+            userId="me", body=filter_body
+        ).execute()
+        print(f"\n  Filter created (ID: {result.get('id', 'unknown')})")
+        print(f"  Criteria : from e.lego.com")
+        print(f"  Action   : apply label '{PERSONAL_NEEDS_COPY_LABEL}'")
+        print()
+        print("  Safety-net filter is now active on your personal Gmail.")
+        print(f"  New LEGO emails will be labeled '{PERSONAL_NEEDS_COPY_LABEL}'.")
+        print("  Run Mode 4 periodically to copy any flagged emails to business Gmail.")
+    except Exception as e:
+        print(f"\n  ERROR creating filter: {e}")
+        print()
+        print("  If you see a 403 or insufficient scope error:")
+        print("  1. Go to Google Cloud Console → APIs & Services → OAuth consent screen")
+        print("     → Data Access tab and ensure these scopes are listed:")
+        print("       gmail.modify, gmail.settings.basic, drive.file")
+        print("  2. Re-run: python setup_oauth.py --personal")
+        print("  3. Try Mode 5 again.")
+
+
+# --------------------------------------------------------------------------- #
 # Main
 # --------------------------------------------------------------------------- #
 
@@ -761,36 +1154,81 @@ def main():
     print("  RESELLOS — AGENT 01B: INVOICE FILING")
     print("=" * 70)
     print()
-    print("  1. Preview  — scan queue, show filing plan, no writes")
-    print("  2. File one — pick one pending invoice and file it")
+    print("  — BUSINESS GMAIL (ongoing) —")
+    print("  1. Preview  — scan business queue, show filing plan, no writes")
+    print("  2. File one — pick one pending invoice and file it to Drive")
     print("  3. Ledger   — show filed invoice history")
     print()
+    print("  — PERSONAL GMAIL (one-time setup) —")
+    print("  4. Personal backfill — copy historical LEGO emails to business Gmail")
+    print("  5. Safety filter     — create personal Gmail filter for e.lego.com")
+    print()
 
-    mode = get_input("Select mode (1/2/3)").strip()
-    if mode not in ("1", "2", "3"):
-        print(f"  Unknown mode '{mode}'. Enter 1, 2, or 3.")
+    mode = get_input("Select mode (1/2/3/4/5)").strip()
+    if mode not in ("1", "2", "3", "4", "5"):
+        print(f"  Unknown mode '{mode}'. Enter 1, 2, 3, 4, or 5.")
         return
 
-    client = get_client()
-
     if mode == "3":
+        client = get_client()
         mode_ledger(client)
         return
 
-    print("\n  Connecting to Gmail and Drive...")
-    try:
-        gmail, drive = build_services()
-        print("  Connected.\n")
-    except Exception as e:
-        print(f"  ERROR connecting to Google APIs: {e}")
-        print("  Run setup_oauth.py to refresh credentials.")
+    if mode in ("1", "2"):
+        client = get_client()
+        print("\n  Connecting to business Gmail and Drive...")
+        try:
+            gmail_biz, drive_biz = build_business_services()
+            print("  Connected.\n")
+        except SystemExit:
+            raise
+        except Exception as e:
+            print(f"  ERROR connecting to Google APIs: {e}")
+            print("  Run: python setup_oauth.py --business")
+            return
+        if mode == "1":
+            mode_preview(gmail_biz, client)
+        else:
+            plans = mode_preview(gmail_biz, client)
+            mode_file(plans, gmail_biz, drive_biz, client)
         return
 
-    if mode == "1":
-        mode_preview(gmail, client)
-    elif mode == "2":
-        plans = mode_preview(gmail, client)
-        mode_file(plans, gmail, drive, client)
+    if mode == "4":
+        print("\n  Connecting to business Gmail...")
+        try:
+            gmail_biz, _ = build_business_services()
+            print("  Connected.")
+        except SystemExit:
+            raise
+        except Exception as e:
+            print(f"  ERROR connecting to business Gmail: {e}")
+            print("  Run: python setup_oauth.py --business")
+            return
+        print("  Connecting to personal Gmail...")
+        try:
+            gmail_personal = build_personal_gmail()
+            print("  Connected.\n")
+        except SystemExit:
+            raise
+        except Exception as e:
+            print(f"  ERROR connecting to personal Gmail: {e}")
+            print("  Run: python setup_oauth.py --personal")
+            return
+        mode_personal_backfill(gmail_personal, gmail_biz)
+        return
+
+    if mode == "5":
+        print("\n  Connecting to personal Gmail...")
+        try:
+            gmail_personal = build_personal_gmail()
+            print("  Connected.\n")
+        except SystemExit:
+            raise
+        except Exception as e:
+            print(f"  ERROR connecting to personal Gmail: {e}")
+            print("  Run: python setup_oauth.py --personal")
+            return
+        mode_create_safety_filter(gmail_personal)
 
 
 if __name__ == "__main__":

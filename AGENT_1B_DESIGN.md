@@ -91,7 +91,7 @@ This keeps Agent 1B consistent with the matching logic the per-retailer email ag
 
 Both mechanisms, built now:
 
-- **Supabase ledger table** `invoice_files` — created 2026-06-10 via migration `011_invoice_files_ledger`. Columns: `id` (uuid PK), `gmail_message_id` (unique), `drive_file_id`, `order_id` (FK → `orders.order_id`), `retailer`, `filed_filename`, `filed_at`, `created_at`. RLS enabled, scoped via `orders.user_id`. This is the source of truth for "what's been filed" and supports re-filing/auditing.
+- **Supabase ledger table** `invoice_files` — created 2026-06-10 via migration `012_invoice_files_ledger`. Columns: `id` (uuid PK), `gmail_message_id` (unique), `drive_file_id`, `order_id` (FK → `orders.order_id`), `retailer`, `filed_filename`, `filed_at`, `created_at`. RLS enabled, scoped via `orders.user_id`. This is the source of truth for "what's been filed" and supports re-filing/auditing.
 - **Gmail labels** — two-stage workflow (see §6 for exact mechanics): `ResellOS-Invoices` (intake/received) and `ResellOS-Filed` (processed), the latter created 2026-06-10 (`Label_1`).
 
 Agent 1B's scan step: query `label:ResellOS-Invoices`, cross-check `gmail_message_id` against `invoice_files` before processing (belt-and-suspenders against a label update failing silently).
@@ -154,7 +154,7 @@ All folder cleanup is complete and verified (2026-06-11):
 
 Done programmatically (this session, 2026-06-10):
 - Created Gmail label `ResellOS-Filed` (`Label_1`).
-- Applied Supabase migration `011_invoice_files_ledger`, creating `public.invoice_files` with RLS.
+- Applied Supabase migration `012_invoice_files_ledger`, creating `public.invoice_files` with RLS.
 
 **Remaining open item:** the Walmart vs. "Walmart Business" folder naming question (§7.5) — otherwise Agent 1B's design inputs are fully settled.
 

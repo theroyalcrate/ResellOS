@@ -1,5 +1,5 @@
 # ResellOS — Claude Context Document
-**Last Updated: 2026-06-10**
+**Last Updated: 2026-06-17**
 **Read this first. This document orients Claude at the start of every conversation.**
 
 > **Document home & sync rule:** The source-of-truth copy lives in the GitHub repo (`theroyalcrate/ResellOS`), edited via Claude Code. An identical copy lives in the Claude project here so chat-Claude starts every conversation current. **When this doc changes: update the repo copy via Claude Code first, then paste the same content into the project copy.** Keep them identical — drift between the two causes re-walking already-completed work.
@@ -55,7 +55,8 @@ Core transactions, cost basis, inventory, and sales always live in the user's ow
 | S8.5 | Intent/channel field split — buy_reason + purchase_trigger refactor, data cleaned | ✓ Done |
 | S09 | Kohl's retailer note (5 real orders verified), tax correction (rewards_reduce_taxable_base = true), migration 011, DECISION 018 | ✓ Done |
 | Pre-S10 Agent 1B | Agent 1B invoice filing automation — Gmail→Drive→Supabase, 50 unit tests, migration 012, .gitignore UTF-8, OAuth setup. 6 bugs fixed in code review. Needs live test (one real invoice end-to-end). | ✓ Built |
-| S10 | Phase 3: variable-earn schema (per-order observed rewards + Kohl's Cash block model with explicit expiration) + earn cliff pin against June 8th orders + Agent 1B live test | → Next |
+| Pre-S10 Agent 1B+1C | Agent 1B extended: Mode 4 personal Gmail backfill (copy personal LEGO emails → business Gmail, idempotent), Mode 5 personal safety-net filter (labels e.lego.com emails ResellOS-Needs-Copy). Agent 1C scope folded in — no separate Agent 1C session needed. 4 code-review bugs fixed. Needs live test of all 5 modes. | ✓ Built |
+| S10 | Phase 3: variable-earn schema (per-order observed rewards + Kohl's Cash block model with explicit expiration) + earn cliff pin against June 8th orders + Agent 1B live test (all 5 modes) | → Next |
 
 **Database state:** 23 tables live, migrations through 012 applied, 5 orders in DB, RLS enabled on all tables.
 
@@ -234,8 +235,18 @@ Full detail: ResellOS-Knowledge vault at Areas/business-logic/email-order-matchi
 
 ## Planned Future Systems (Not Yet Built)
 
-**Agent 1B — Invoice Filing (Built — Pre-S10 Agent 1B, 2026-06-10)**
-`agents/agent_01b_invoice_filing.py` — Gmail → Drive → Supabase ledger. Three modes: (1) Preview (read-only scan of ResellOS-Invoices label), (2) File one (explicit confirmation), (3) Ledger review. Naming convention: `{order_number}_{RETAILER}_{YYYY-MM-DD}.pdf`, `_ship{N}` for split shipments, `_unmatched/{msg_id}_{RETAILER}_{date}.pdf` for unmatched. Walmart routing: `businessinfo@walmart.com` → `Walmart Business/`, `help@walmart.com` → `Walmart/`. `invoice_files` Supabase ledger (migration 012) provides idempotency and audit trail. 50 unit tests in `tests/test_agent_01b_pure_logic.py`. OAuth: `credentials/token.json` (gitignored). **Pending: live test with one real invoice before broader use.**
+**Agent 1B — Invoice Filing + Personal Backfill (Built — Pre-S10 Agent 1B+1C, 2026-06-17)**
+`agents/agent_01b_invoice_filing.py` — Five modes: (1) Preview business queue, (2) File one invoice (business Gmail→Drive), (3) Ledger review, (4) Personal Gmail backfill, (5) Personal safety-net filter. Agent 1C scope folded into Agent 1B — no separate Agent 1C session will be built.
+
+Part 1 (Modes 1-3): Business Gmail → Drive → Supabase ledger. Naming convention: `{order_number}_{RETAILER}_{YYYY-MM-DD}.pdf`. `invoice_files` table keyed on `gmail_message_id`. Label move: ResellOS-Invoices → ResellOS-Filed.
+
+Part 2 (Mode 4): Personal Gmail backfill. Searches `from:(e.lego.com) has:attachment` in personal Gmail, copies each unprocessed email to business Gmail under ResellOS-Invoices, labels personal copy ResellOS-Processed. Idempotent: primary guard = ResellOS-Processed label; secondary guard = `rfc822msgid:` search on business Gmail (catches partial failures where business insert succeeded but personal labeling failed).
+
+Part 3 (Mode 5): Creates Gmail filter on personal account: `from:(e.lego.com)` → label ResellOS-Needs-Copy. Safety net only; P0 forwarding handles most new LEGO invoices.
+
+OAuth: `credentials/token_business.json` (gmail.modify + drive) and `credentials/token_personal.json` (gmail.modify + gmail.settings.basic). Both gitignored via `credentials/`. Run `setup_oauth.py` to generate both (two browser windows, clear labels). Legacy `token.json` auto-migrated to `token_business.json`.
+
+50 unit tests: `tests/test_agent_01b_pure_logic.py`. **Pending: live test of all 5 modes before broader use.**
 
 **S09 — Barnes Scrapyard Verification (Still Deferred)**
 Verify cost basis engine Layer 3 (rewards redemption) against Barnes Scrapyard order ($52.43 rewards redemption, $21.65 out of pocket).

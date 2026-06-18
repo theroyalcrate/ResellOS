@@ -4,8 +4,8 @@
 
 | | |
 |---|---|
-| **Last Updated** | 2026-06-10 |
-| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓ |
+| **Last Updated** | 2026-06-17 |
+| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓ |
 | **Next Session** | S10 (variable-earn schema, after CPA meeting) + Agent 1B live test |
 | **Phase** | P1 — Week 2 |
 | **GitHub** | theroyalcrate/ResellOS |
@@ -19,10 +19,14 @@
 ### S10 — Variable-Earn Schema + Agent 1B Live Test *(after June 10 CPA meeting)*
 
 **Step 1 — Agent 1B live test (do this first, takes 5 minutes):**
-- Agent 1B is built and tested (50/50 unit tests passing). Run Mode 1 preview: `python agents/agent_01b_invoice_filing.py` → select 1.
-- Review the queue, confirm one invoice looks right, then run Mode 2 to file one.
+- Agent 1B is built (50/50 unit tests passing). Now has 5 modes: 1=Preview, 2=File one, 3=Ledger, 4=Personal backfill, 5=Safety filter.
+- Run `python setup_oauth.py` first — this now sets up BOTH business token (token_business.json) and personal token (token_personal.json). Two browser windows will open — follow console prompts.
+- Then run Mode 1 preview: `python agents/agent_01b_invoice_filing.py` → select 1. Review the queue, confirm one invoice looks right.
+- Then run Mode 4 to backfill personal Gmail history → select 4. Review the summary log.
+- Then run Mode 2 to file one business invoice → select 2.
+- Then run Mode 5 to create the personal safety-net filter → select 5.
 - **Do not file broadly until at least one real invoice is verified end-to-end** (Gmail → Drive → ledger → label transition).
-- Migration 012 (`invoice_files` ledger) is local only — apply it to Supabase before running Mode 2: paste `migrations/012_invoice_files_ledger.sql` into Supabase MCP (or SQL editor) if it hasn't been applied yet.
+- Migration 012 (`invoice_files` ledger) was applied 2026-06-10 — already in Supabase.
 
 **Step 2 — CPA meeting takeaways:**
 - Record answers to Q1–Q5 in `Projects/cpa-meeting/cpa-meeting-2026-06-10.md`.
@@ -79,7 +83,8 @@
 | S09 | Kohl's retailer note (5 real orders), tax correction (DECISION 018), migration 011, CONTEXT.md + SESSION_LOG.md updated | ✓ Complete |
 | Pre-S10 (2026-06-07) | Knowledge vault phase 2: CPA prep note, Macy's note, Amazon note. Architecture decision: account_type migration needed for retailer_profiles (Amazon + Walmart). | ✓ Complete |
 | Pre-S10 Agent 1B (2026-06-10) | Agent 1B invoice filing built: pure-logic functions, 50 unit tests, I/O layer (Gmail/Drive/Supabase), migration 012 (invoice_files), .gitignore UTF-8 fix, setup_oauth.py. Code-reviewed — 6 bugs fixed. Needs live test (Mode 1 preview, then Mode 2 one invoice). | ✓ Built, pending live test |
-| S10 | Phase 3: variable-earn schema + account_type migration (013) + Kohl's Cash block model (014) + CPA-gated decisions applied + Agent 1B live test | ⏳ After CPA |
+| Pre-S10 Agent 1B+1C (2026-06-17) | Agent 1B extended with personal Gmail backfill (Mode 4) + safety-net filter (Mode 5). What was planned as separate Agent 1C is now folded in. setup_oauth.py rewritten for two tokens. 4 code-review bugs fixed (base64 padding, expired-creds, rfc822msgid query, double-fetch). Needs live test of all 5 modes. | ✓ Built, pending live test |
+| S10 | Phase 3: variable-earn schema + account_type migration (013) + Kohl's Cash block model (014) + CPA-gated decisions applied + Agent 1B live test (all 5 modes) | ⏳ After CPA |
 
 ---
 
@@ -99,6 +104,45 @@
 ---
 
 ## Session History
+
+### Pre-S10 Agent 1B+1C — Personal Gmail Backfill + Safety Filter ✓ Built — 2026-06-17
+
+**What was built (consolidates previously planned Agent 1C into Agent 1B):**
+- **`setup_oauth.py`** — rewritten to handle two OAuth sessions: business account (gmail.modify + drive → `token_business.json`) and personal account (gmail.modify + gmail.settings.basic → `token_personal.json`). Legacy `token.json` auto-migrated to `token_business.json` on first run. `setup_oauth.py --business` and `--personal` flags allow individual setup. Two browser windows prompt on first run with clear console labels (BUSINESS / PERSONAL).
+- **`.gitignore`** — added explicit entries for `token_business.json` and `token_personal.json` (belt-and-suspenders; `credentials/` already covers them).
+- **`agents/agent_01b_invoice_filing.py`** — extended with two new modes:
+  - **Mode 4 — Personal Gmail backfill** (Part 2): searches personal Gmail for LEGO emails from `e.lego.com` with attachments, not yet labeled `ResellOS-Processed`. For each: checks business Gmail via `rfc822msgid:` search (dedup guard), copies raw message to business Gmail with `ResellOS-Invoices` label, then labels personal copy `ResellOS-Processed`. Partial-failure safe: if business insert succeeds but personal labeling fails, the `rfc822msgid:` check on the next run detects the existing copy and retries only the labeling.
+  - **Mode 5 — Safety-net filter** (Part 3): creates a Gmail filter on the personal account matching `from:(e.lego.com)`, applying label `ResellOS-Needs-Copy` to any new matching email. Safety net only — P0 forwarding rule handles most new LEGO invoices directly to business.
+  - Auth refactored: `_load_creds()` now properly returns None (not a broken Credentials object) when token is expired with no refresh_token. `build_business_services()` and `build_personal_gmail()` are separate functions; each mode loads only the credentials it needs.
+
+**Code review — 4 bugs fixed before commit:**
+1. CRITICAL (base64 padding): `raw_b64 + "=="` always corrupts the raw message when `len(raw_b64) % 4 == 3`. Fixed: `"=" * (-len(raw_b64) % 4)`.
+2. HIGH (expired credential): Expired token with revoked refresh_token returned non-None, causing `build()` to succeed but first API call to 401 with no actionable error. Fixed: `_load_creds` returns `None` when `not creds.valid` and refresh is impossible.
+3. MEDIUM (rfc822msgid query): Bare unquoted Message-ID in search query breaks silently if ID contains colons/spaces. Fixed: normalise to `<id>` angle-bracket form that Gmail expects.
+4. EFFICIENCY (double-fetch): Mode 4 made two API calls per message (metadata + full). Fixed: added `Message-ID` to `metadataHeaders`; second fetch eliminated.
+
+**Credentials structure (all gitignored via `credentials/`):**
+- `credentials/credentials.json` — OAuth client secret (download from Cloud Console, never regenerated)
+- `credentials/token_business.json` — business Gmail + Drive (gmail.modify + drive)
+- `credentials/token_personal.json` — personal Gmail (gmail.modify + gmail.settings.basic)
+- `credentials/token.json` — legacy name from pre-S10 setup; auto-migrated by `setup_oauth.py`
+
+**Scope note:** If setup_oauth.py fails with a scope error for the personal account, the OAuth consent screen needs `gmail.settings.basic` added under APIs & Services → OAuth consent screen → Data Access.
+
+**Pending — do before broad use (all 5 modes):**
+1. Run `python setup_oauth.py` to create `token_personal.json` (business token migrates automatically from `token.json`).
+2. Run Mode 4 to backfill personal Gmail history. Review summary log.
+3. Run Mode 5 to create the personal safety-net filter.
+4. Run Mode 1 (Preview) to confirm business queue looks right.
+5. Run Mode 2 to file one invoice end-to-end. Verify Drive path + ledger + label.
+6. User asked: "Ask me before processing any real emails — test on one or two first."
+
+**Commit message:**
+```
+S10: Agent 1B — invoice filing from business + personal Gmail to Drive, idempotent, with personal-side safety net filter
+```
+
+---
 
 ### Pre-S10 Agent 1B — Invoice Filing Automation ✓ Built — 2026-06-10
 
