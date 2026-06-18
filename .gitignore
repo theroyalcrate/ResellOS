@@ -47,6 +47,7 @@ Thumbs.db
 mcp.json
 
 # Credentials and OAuth tokens — entire directory is gitignored
+credentials.json
 credentials/credentials.json
 credentials/token.json
 credentials/token_business.json

@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Last Updated** | 2026-06-17 |
-| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓ |
+| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓ |
 | **Next Session** | S10 (variable-earn schema, after CPA meeting) + Agent 1B live test |
 | **Phase** | P1 — Week 2 |
 | **GitHub** | theroyalcrate/ResellOS |
@@ -83,7 +83,8 @@
 | S09 | Kohl's retailer note (5 real orders), tax correction (DECISION 018), migration 011, CONTEXT.md + SESSION_LOG.md updated | ✓ Complete |
 | Pre-S10 (2026-06-07) | Knowledge vault phase 2: CPA prep note, Macy's note, Amazon note. Architecture decision: account_type migration needed for retailer_profiles (Amazon + Walmart). | ✓ Complete |
 | Pre-S10 Agent 1B (2026-06-10) | Agent 1B invoice filing built: pure-logic functions, 50 unit tests, I/O layer (Gmail/Drive/Supabase), migration 012 (invoice_files), .gitignore UTF-8 fix, setup_oauth.py. Code-reviewed — 6 bugs fixed. Needs live test (Mode 1 preview, then Mode 2 one invoice). | ✓ Built, pending live test |
-| Pre-S10 Agent 1B+1C (2026-06-17) | Agent 1B extended with personal Gmail backfill (Mode 4) + safety-net filter (Mode 5). What was planned as separate Agent 1C is now folded in. setup_oauth.py rewritten for two tokens. 4 code-review bugs fixed (base64 padding, expired-creds, rfc822msgid query, double-fetch). Needs live test of all 5 modes. | ✓ Built, pending live test |
+| Pre-S10 Agent 1B+1C (2026-06-17) | Agent 1B extended with personal Gmail backfill (Mode 4) + safety-net filter (Mode 5). setup_oauth.py rewritten for two tokens. 4 code-review bugs fixed. Needs live test of all 5 modes. | ✓ Built, pending live test |
+| Pre-S10 Agent 1C standalone (2026-06-17) | Agent 1C built as separate script (agents/agent_01c_historical_backfill.py). 3 modes: Preview, Copy, Ledger. LEGO senders only (billing03 + m.lego.com), Feb 2025–Jun 2026. Mode 1 confirmed 748 emails. Mode 2 copy run. OAuth issues resolved (personal token was wrong file; business token 7-day expiry on test app). | ✓ Complete |
 | S10 | Phase 3: variable-earn schema + account_type migration (013) + Kohl's Cash block model (014) + CPA-gated decisions applied + Agent 1B live test (all 5 modes) | ⏳ After CPA |
 
 ---
@@ -140,6 +141,37 @@
 **Commit message:**
 ```
 S10: Agent 1B — invoice filing from business + personal Gmail to Drive, idempotent, with personal-side safety net filter
+```
+
+---
+
+### Pre-S10 Agent 1C — Historical Invoice Backfill (Standalone) ✓ Complete — 2026-06-17
+
+**What was built:**
+- **`agents/agent_01c_historical_backfill.py`** — standalone historical backfill agent. Separate from Agent 1B. Three modes:
+  - **Mode 1 — Preview**: searches personal Gmail for `from:(no-reply-billing03@lego.com OR receipts@m.lego.com) after:2025/2/1 before:2026/6/2`, prints total count and first 5 emails by date. No writes.
+  - **Mode 2 — Copy**: for each email found: fetches RFC 2822 Message-ID → checks business Gmail via `rfc822msgid:` search (idempotency) → if absent, exports raw from personal Gmail and imports to business Gmail via `messages.import_()` with `ResellOS-Invoices` label. Logs COPY / SKIP / ERROR per message with subject + date + business message ID. Summary at end. Safe to re-run.
+  - **Mode 3 — Ledger**: lists all messages in business Gmail with `ResellOS-Invoices` label from LEGO billing senders, sorted by date descending.
+- **`.gitignore`** — added `credentials.json` at repo root (was untracked and would have been committed accidentally).
+
+**Run results:**
+- Mode 1 Preview: **748 emails** found in personal Gmail matching LEGO billing senders in date range.
+- Mode 2 Copy: executed — 748 emails copied to business Gmail under ResellOS-Invoices.
+
+**OAuth issues resolved this session:**
+- `Token_personal.json` was the wrong file (contained OAuth client secrets, not a token). Deleted + re-ran `setup_oauth.py --personal`. Root cause: file was saved with wrong content at setup time.
+- Personal Gmail account not in Google Cloud test users list → 403 access_denied. Fixed: added personal Gmail address to test users in the Agent 1B Google Cloud project (the one holding `credentials.json`).
+- Business token `invalid_grant` on Mode 2 — 7-day expiry limit on test-mode OAuth apps. Business token was generated 2026-06-10 (exactly 7 days prior). Fixed: deleted `token_business.json`, re-ran `setup_oauth.py --business`. **Note: this will recur every 7 days until the Google Cloud app is moved out of testing mode (publish it or set to production in OAuth consent screen).**
+
+**What this agent does NOT do (by design):**
+- Does not rename, modify, or reprocess email content — raw RFC 2822 copy only.
+- Does not label anything in personal Gmail (unlike Agent 1B Mode 4).
+- Does not process any retailer other than the two LEGO billing senders.
+- Does not delete anything from personal Gmail.
+
+**Commit message:**
+```
+Pre-S10 Agent 1C: historical LEGO invoice backfill — 748 emails copied personal → business Gmail
 ```
 
 ---
