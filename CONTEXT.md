@@ -1,5 +1,5 @@
 # ResellOS — Claude Context Document
-**Last Updated: 2026-06-17**
+**Last Updated: 2026-06-20**
 **Read this first. This document orients Claude at the start of every conversation.**
 
 > **Document home & sync rule:** The source-of-truth copy lives in the GitHub repo (`theroyalcrate/ResellOS`), edited via Claude Code. An identical copy lives in the Claude project here so chat-Claude starts every conversation current. **When this doc changes: update the repo copy via Claude Code first, then paste the same content into the project copy.** Keep them identical — drift between the two causes re-walking already-completed work.
@@ -306,6 +306,7 @@ Capture screenshots of current reselling software using Claude in Chrome. Annota
 | Per-retailer tax behavior (rewards_reduce_taxable_base) | Per-retailer boolean flag, default false. true = promo-cash/coupons are pre-tax discounts that reduce the taxable base; engine must use actual invoice tax, never recompute it. Set only from real invoice evidence — never assumed. Kohl's = true (confirmed 5 orders). Macy's = false (confirmed 2026-06-07 — Star Money is post-tax tender). (DECISION 018, 2026-06-05) |
 | Dual-account retailer architecture | Amazon and Walmart each have Business and Personal accounts with different tax treatment. `retailer_profiles` needs `account_type text DEFAULT 'default'` column + updated unique constraint `UNIQUE (user_id, retailer_key, account_type)`. Will be Migration 013 (012 taken by invoice_files). Affects both Amazon and Walmart — design once, apply to both. |
 | Invoice filing (Agent 1B) | `invoice_files` Supabase ledger (migration 012) keyed on `gmail_message_id` — dedup key, checked before any write. One row per email. Gmail two-stage label move: `ResellOS-Invoices` (intake, `Label_2573281147792874926`) → `ResellOS-Filed` (processed, `Label_1`). Drive path: `Invoices/{Retailer}/{Year}/{Month Year}/`. OAuth credentials in `credentials/` (gitignored). (2026-06-10) |
+| Authenticated account scraping vs. enrichment scraping (data acquisition boundary) | Two different trust tiers, two different tools. **Authenticated account data** (LEGO order history, gift card balances — anything behind a login) is only ever pulled through the user's own already-authenticated real browser session (Claude in Chrome), one order at a time, at a deliberately slow/human-paced rate, and never run concurrently with the user actively placing orders on the same site. Never use a third-party scraping/proxy service (e.g. Apify) for this tier — proxy rotation is built for anonymous public-page rate-limit evasion, and using it against a logged-in account (new IP/datacenter authenticating with the user's credentials) looks like account-takeover behavior to retailer fraud detection, risking an account lock — a far worse failure mode than a rate limit. **Public/enrichment data** (deal alerts, stock levels, set/retirement data) has no such constraint — it's not account-bound and not load-bearing per the "own your data, rent enrichment" principle, so Apify or similar scraping services are the right tool there; proxy rotation does exactly what it's designed for on anonymous public pages. (Decided 2026-06-20) |
 
 ---
 
@@ -337,6 +338,38 @@ Questions to answer before year-end:
 12. **Backfill set_number on old line items** — parser captures set_number now, but rows written before that change have null. Re-parse old invoices to backfill.
 13. **Duplicate line items** — cross-path (manual + parser) historical artifact. Inspect and clean before further cost-basis work.
 14. **Unit-level inventory schema confirmation** — confirm one row per physical unit before building inventory layer. Unit-level rows enable Specific Identification costing; harder to retrofit later.
+
+---
+
+## LEGO Order Scrape — Priority System
+
+Historical LEGO order data is captured by walking the live LEGO order history page in the user's already-authenticated browser (Claude in Chrome). This is authenticated account scraping — see Architecture Decisions for the trust-tier boundary that governs it.
+
+**Where the files live:** Claude Project folder **"ResellOS software development"** (NOT this repo — they are working files, not committed code).
+
+| File | Contents |
+|------|----------|
+| `lego_order_numbers_master.txt` | Full master list of all known LEGO order numbers (635 as of 2026-06-20) |
+| `lego_orders_todo.txt` | Orders still needing scrape attention (532 as of 2026-06-20) |
+| `lego_scrape_priority.csv` | Priority tier per todo order (see tiers below) |
+| `lego_gift_cards_master.csv` | Master gift card ledger being assembled from scrape + Brickprobe data |
+| `order_gift_card_links.csv` | Maps orders to the gift cards used to pay for them |
+| `brickprobe_purchases_2026-06-19.csv` | Brickprobe export (community LEGO purchase-tracking tool) used as cross-reference to avoid re-scraping orders that already have cost/GC data |
+| `lego_order_scrape.csv` | (This repo, repo root) Accumulated scrape output — one row per order |
+
+**Priority tiers in `lego_scrape_priority.csv`:**
+
+| Tier | Label | Count (2026-06-20) | Meaning | Scrape value |
+|------|-------|-------------------|---------|-------------|
+| 3 | Not in Brickprobe | 55 | No data anywhere else — these orders have no cost or GC info from any source | **Highest — scrape these first** |
+| 2 | In Brickprobe, no GC | 378 | Order data exists in Brickprobe but gift card assignment is missing | Medium |
+| 1 | GC confirmed by Brickprobe | 133 | Both cost and GC data already resolved via Brickprobe | **Lowest — can likely skip** |
+
+**Rule for future scrape sessions:** Pull the next target from `lego_orders_todo.txt` ordered by priority **3 → 2 → 1** (highest-value gaps first). Do NOT navigate to the live LEGO order history page in default newest-first order — that picks up recent orders before older data gaps are filled, and recent orders will reconcile normally via Brickprobe / invoice matching anyway.
+
+**⚠ Priority direction to verify:** The tier numbering (3 = highest priority) is counterintuitive — confirm against whoever built `lego_scrape_priority.csv` that 3 actually means "scrape first" before running a bulk session against it.
+
+**2026-06-20 process note:** Four orders were captured outside the priority backlog this session by walking the live order history page newest-first: T507760965, T507761629, T507771505, T507787478 (all 2026-06-19/20). These are newer than anything in the backlog and weren't in `lego_orders_todo.txt`. The captures weren't harmful — the data is now in `lego_order_scrape.csv` and will reconcile normally — but it wasn't the right next target. Next session should resume from `lego_orders_todo.txt` at priority 3.
 
 ---
 

@@ -4,8 +4,8 @@
 
 | | |
 |---|---|
-| **Last Updated** | 2026-06-17 |
-| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓ |
+| **Last Updated** | 2026-06-20 |
+| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓ |
 | **Next Session** | S10 (variable-earn schema, after CPA meeting) + Agent 1B live test |
 | **Phase** | P1 — Week 2 |
 | **GitHub** | theroyalcrate/ResellOS |
@@ -85,6 +85,7 @@
 | Pre-S10 Agent 1B (2026-06-10) | Agent 1B invoice filing built: pure-logic functions, 50 unit tests, I/O layer (Gmail/Drive/Supabase), migration 012 (invoice_files), .gitignore UTF-8 fix, setup_oauth.py. Code-reviewed — 6 bugs fixed. Needs live test (Mode 1 preview, then Mode 2 one invoice). | ✓ Built, pending live test |
 | Pre-S10 Agent 1B+1C (2026-06-17) | Agent 1B extended with personal Gmail backfill (Mode 4) + safety-net filter (Mode 5). setup_oauth.py rewritten for two tokens. 4 code-review bugs fixed. Needs live test of all 5 modes. | ✓ Built, pending live test |
 | Pre-S10 Agent 1C standalone (2026-06-17) | Agent 1C built as separate script (agents/agent_01c_historical_backfill.py). 3 modes: Preview, Copy, Ledger. LEGO senders only (billing03 + m.lego.com), Feb 2025–Jun 2026. Mode 1 confirmed 748 emails. Mode 2 copy run. OAuth issues resolved (personal token was wrong file; business token 7-day expiry on test app). | ✓ Complete |
+| Cowork 2026-06-20 | Auth-vs-enrichment scraping architecture decision logged. 4 orders captured outside priority backlog (T507760965, T507761629, T507771505, T507787478 — 2026-06-19/20). Scrape priority system documented in CONTEXT.md. | ✓ Complete |
 | S10 | Phase 3: variable-earn schema + account_type migration (013) + Kohl's Cash block model (014) + CPA-gated decisions applied + Agent 1B live test (all 5 modes) | ⏳ After CPA |
 
 ---
@@ -172,6 +173,39 @@ S10: Agent 1B — invoice filing from business + personal Gmail to Drive, idempo
 **Commit message:**
 ```
 Pre-S10 Agent 1C: historical LEGO invoice backfill — 748 emails copied personal → business Gmail
+```
+
+---
+
+### Cowork 2026-06-20 — Auth Scraping Decision + Scrape Priority System ✓ Done — 2026-06-20
+
+**Context:** Outside VS Code, Cowork chat session. Encountered a stray `.git/index.lock` from a prior stuck push — removed on next session start (confirmed no git process was running before removing).
+
+**Architecture decision logged (CONTEXT.md — Architecture Decisions table):**
+- **Authenticated account scraping vs. enrichment scraping (data acquisition boundary):** Two trust tiers, two tools. Authenticated account data (LEGO order history, gift card balances — anything behind a login) is only ever pulled through the user's own already-authenticated real browser session (Claude in Chrome), one order at a time, at a deliberately slow/human-paced rate. Never use third-party scraping/proxy services (e.g. Apify) for this tier — proxy rotation against a logged-in account looks like account-takeover to retailer fraud detection, risking an account lock. Public/enrichment data (deal alerts, stock, retirement data) has no such constraint — Apify or similar is the right tool there. (Decided 2026-06-20)
+
+**Scrape priority system documented (CONTEXT.md — new section "LEGO Order Scrape — Priority System"):**
+- Backlog files live in the Claude Project folder "ResellOS software development" (not this repo).
+- Key files: `lego_orders_todo.txt` (532 orders needing attention), `lego_scrape_priority.csv` (tier per order), `lego_order_numbers_master.txt` (635 total), Brickprobe cross-reference CSV, gift card master ledgers.
+- Priority tiers: 3 = Not in Brickprobe (55 orders — scrape first), 2 = In Brickprobe no GC (378), 1 = GC confirmed (133 — lowest value, can likely skip).
+- Rule: future sessions pull next target from `lego_orders_todo.txt` by priority 3 → 2 → 1. Do NOT walk the live order history page newest-first.
+- ⚠ Priority direction to verify: tier 3 = "scrape first" is counterintuitive numbering — confirm before bulk session.
+
+**4 orders captured outside priority backlog this session:**
+These were captured by walking the live LEGO order history page newest-first — not from the priority backlog. They are newer than anything in the backlog and weren't in `lego_orders_todo.txt`. Data is in `lego_order_scrape.csv` and will reconcile normally via Brickprobe/invoice matching; the process miss was using the wrong target source.
+
+| Order | Date | Total | Notes |
+|-------|------|-------|-------|
+| T507760965 | 2026-06-19 | $169.27 | GC 2051 + Visa ••••3013; GWP Leonardo da Vinci; Mickey Mouse Clubhouse backordered |
+| T507761629 | 2026-06-19 | $169.35 | GC 2036 + GC 1996 + Visa ••••3013; GWP Leonardo da Vinci |
+| T507771505 | 2026-06-19 | $169.29 | GC 2093 + Visa ••••3013; GWP Leonardo da Vinci; Mickey Mouse Clubhouse backordered |
+| T507787478 | 2026-06-20 | $169.34 | Full GC 2135; GWP Leonardo da Vinci |
+
+**Next session:** Resume scraping from `lego_orders_todo.txt` starting at priority 3 (55 orders not in Brickprobe). Verify priority direction (3 = first) before starting bulk session.
+
+**Commit message:**
+```
+Cowork 2026-06-20: auth scraping decision, scrape priority system, 4 orders captured outside backlog
 ```
 
 ---
