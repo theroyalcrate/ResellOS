@@ -4,13 +4,13 @@
 
 | | |
 |---|---|
-| **Last Updated** | 2026-06-20 |
-| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓ |
-| **Next Session** | S10 (variable-earn schema, after CPA meeting) + Agent 1B live test |
+| **Last Updated** | 2026-06-28 |
+| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓ |
+| **Next Session** | S10 (variable-earn schema + Agent 1B live test) — all blocking decisions now resolved |
 | **Phase** | P1 — Week 2 |
 | **GitHub** | theroyalcrate/ResellOS |
 
-> **Document home & sync rule:** Source-of-truth copy lives in the GitHub repo, edited via Claude Code. GitHub MCP read access confirmed 2026-06-03 — chat-Claude can read the repo directly. Manual paste into project copy is no longer required. Writes still route through Claude Code.
+> **Document home & sync rule (revised 2026-06-21):** This repo is the only copy. There is no project-knowledge paste-in anymore — it was deleted on 2026-06-21 because it kept going stale and caused sessions to start from outdated context. Every surface (plain chat, Cowork, Claude Code) reads CLAUDE.md → CONTEXT.md → SESSION_LOG.md live from this repo (or fetched fresh from GitHub if no folder access) at the start of every session — never from memory or a cached copy. Enforced by the `resell-os-session-start` skill — see `skills/resell-os-session-start.md`.
 
 ---
 
@@ -28,9 +28,10 @@
 - **Do not file broadly until at least one real invoice is verified end-to-end** (Gmail → Drive → ledger → label transition).
 - Migration 012 (`invoice_files` ledger) was applied 2026-06-10 — already in Supabase.
 
-**Step 2 — CPA meeting takeaways:**
-- Record answers to Q1–Q5 in `Projects/cpa-meeting/cpa-meeting-2026-06-10.md`.
-- Apply gated decisions: ADR-019 (FIFO), cashback layer activation, Capital One chain `gift_cards.price_paid` write path.
+**Step 2 — CPA meeting outcome (resolved 2026-06-21):**
+- FIFO and cashback tax treatment turned out to be personal-preference choices — the CPA will work with whichever way Josh decides, no CPA-mandated answer is coming. Not blocked on external guidance anymore.
+- Still needed: Josh's own decision on each, written up as ADR-019 (FIFO) once made; cashback layer activation decision; Capital One chain `gift_cards.price_paid` write path decision.
+- Record full answers in `Projects/cpa-meeting/cpa-meeting-2026-06-10.md` when ready.
 
 **Step 3 — S10 schema work (see S10 section below).**
 
@@ -50,8 +51,8 @@
 5. Code review the agent_02 diff before commit (resell-os-code-review skill — look for any path that still derives a reward amount from a rate).
 6. Commit: "S10: Variable-earn schema — read rewards from invoice, Kohl's Cash block model, migrations 013-014"
 
-**CPA-gated decisions to apply in S10:**
-- Q1 (FIFO): write ADR-019, lock `users.costing_method` docs
+**Decisions to apply in S10 (no longer CPA-gated, just need Josh's call — see Cowork 2026-06-21 entry below):**
+- Q1 (FIFO): write ADR-021 once decided (ADR-019 is now taken by Order Settlement Gate; ADR-020 is cost basis regression testing), lock `users.costing_method` docs
 - Q2 (cashback treatment): activate or leave off Layer 4, update cashback agent
 - Q5 (Capital One chain): set `gift_cards.price_paid` write path for C1 Shopping → Macy's gift card
 
@@ -86,7 +87,11 @@
 | Pre-S10 Agent 1B+1C (2026-06-17) | Agent 1B extended with personal Gmail backfill (Mode 4) + safety-net filter (Mode 5). setup_oauth.py rewritten for two tokens. 4 code-review bugs fixed. Needs live test of all 5 modes. | ✓ Built, pending live test |
 | Pre-S10 Agent 1C standalone (2026-06-17) | Agent 1C built as separate script (agents/agent_01c_historical_backfill.py). 3 modes: Preview, Copy, Ledger. LEGO senders only (billing03 + m.lego.com), Feb 2025–Jun 2026. Mode 1 confirmed 748 emails. Mode 2 copy run. OAuth issues resolved (personal token was wrong file; business token 7-day expiry on test app). | ✓ Complete |
 | Cowork 2026-06-20 | Auth-vs-enrichment scraping architecture decision logged. 4 orders captured outside priority backlog (T507760965, T507761629, T507771505, T507787478 — 2026-06-19/20). Scrape priority system documented in CONTEXT.md. | ✓ Complete |
-| S10 | Phase 3: variable-earn schema + account_type migration (013) + Kohl's Cash block model (014) + CPA-gated decisions applied + Agent 1B live test (all 5 modes) | ⏳ After CPA |
+| Cowork 2026-06-21 | Architecture review (ADR-020 proposed: cost basis regression testing, before Agent 1C bulk backfill). Live Supabase check: only 5 orders exist, cost_basis_state never advances past "estimated" even on a fully-settled order. Found Brickprobe file + consolidated all scrape working files from the "ResellOS software development" project folder into this repo. Confirmed GitHub/Gmail/Drive connectors live in Cowork. CPA outcome clarified (FIFO/cashback are personal choice). Investigated and rejected installing GSD ("get-shit-done") — confirmed compromised original maintainer, unresolved security gaps in community fork. Root-caused cross-surface context drift; resell-os-session-start skill created; project-knowledge paste-in deleted. | ✓ Complete |
+| Cowork 2026-06-22 | 36 LEGO gift cards bulk-loaded into Supabase (4 purchase dates: Jun 14/17/20/21, all $250/$225/10%/giftcards.com). lego_gift_cards_master.csv updated. GC *2275 purchase_date corrected. 3 LEGO orders entered: T508041747, T508056398, T508059246 (all Jun 22, 2× Insiders, each with 40902 GWP). ADR-019 written: Order Settlement Gate — conditions for cost_basis_state → settled (3 trigger events, 3 conditions). DECISION 019 added to CONTEXT.md. Multi-retailer GC ledger scoped: lgc_2026.xlsx has 5 tabs (lego, GC, B&N, WM, Kohl's, Target) — WM/Target/B&N/Kohl's import is next Cowork session. Confirmed GWP Philosophy C + FIFO design (per-order, not per-unit). | ✓ Complete |
+| Cowork 2026-06-26 | ADR-021 (FIFO locked), ADR-022 (cashback Layer 4 active + C1 chain ends at GC), DECISION 020 added to CONTEXT.md. Email agent architecture designed (one configurable agent, not 7 separate ones). | ✓ Complete |
+| Cowork 2026-06-28 | Non-LEGO GC import into Supabase: 175 rows (B&N 139, Kohl's 15, Target 21) from lgc_2026.xlsx. 44 active cards totaling $3,631.69 in available balance. CONTEXT.md + SESSION_LOG.md updated to close ADR-021/022 open questions. | ✓ Complete |
+| S10 | Phase 3: variable-earn schema + account_type migration (013) + Kohl's Cash block model (014) + all decisions now resolved + Agent 1B live test (all 5 modes) | ⏳ Next |
 
 ---
 
@@ -96,7 +101,8 @@
 
 - **23** tables live (invoice_files added — migration 012 applied 2026-06-10)
 - Migrations applied through **012**
-- **5** orders in DB
+- **8** orders in DB (T487170400, T507760965, T507761629, T507771505, T507787478, T508041747, T508056398, T508059246)
+- **211** gift cards in gift_cards table: 36 LEGO (giftcards.com, $250/$225/10%, Jun 14–21 2026) + 175 non-LEGO (B&N 139, Kohl's 15, Target 21 — imported 2026-06-28 from lgc_2026.xlsx; 44 active cards, $3,631.69 available balance)
 - **RLS ON** — every table secured
 - **Multi-user** — user_id on every table
 - Code committed to GitHub (note: GitHub MCP not currently connecting — verify via Claude Code)
@@ -106,6 +112,182 @@
 ---
 
 ## Session History
+
+### Cowork 2026-06-26 — Decisions Locked + ADRs + GC Import + Email Agent Design ⏳ In Progress
+
+**ADR-021 — FIFO Costing Method (Locked):**
+- FIFO confirmed as the costing method going forward. CPA confirmed 2026-06-10 this is a personal-preference choice.
+- `ADR-021-fifo-costing-method.md` written to repo root.
+- CONTEXT.md Architecture Decisions table updated: costing method row now reads "locked 2026-06-26."
+- Do not change after data accumulates — every `true_cost_basis` would need recalculation.
+
+**ADR-022 — Cashback Tax Treatment + Capital One Chain (Locked):**
+- Layer 4 (cashback allocation) is now ACTIVE for all cash-payout platforms (Rakuten, RMN, Microsoft Shopping, Honey, TopCashback).
+- Capital One Shopping can only redeem as gift cards (no cash option). Chain ends at GC acquisition: GC recorded at `price_paid = $0`, Layer 2 applies full face value as discount. No chain-following into inventory cost basis.
+- New `cashback_transactions.status = 'redeemed_as_gc'` prevents Layer 4 double-counting for C1 GC redemptions.
+- `ADR-022-cashback-treatment-capital-one-chain.md` written to repo root.
+- DECISION 020 added to CONTEXT.md.
+- **Code changes needed (S10 or standalone):**
+  - `agent_07_cashback.py` Mode 2: add cash/GC branch; GC path creates `gift_cards` row at $0, sets `redeemed_as_gc`
+  - `agent_08_cost_basis.py` Layer 4: add `redeemed_as_gc` to skip filter
+  - Check if `cashback_transactions.status` has a check constraint needing a migration
+
+**Non-LEGO gift card import (completed 2026-06-28):**
+- `lgc_2026.xlsx` sanitized: last 4 digits only, no access codes/PINs stored.
+- 175 rows inserted into Supabase `gift_cards` table: B&N (139), Kohl's (15), Target (21). All use `ON CONFLICT DO NOTHING`.
+- Active balances: B&N 19 cards $601.69, Kohl's 4 cards $2,000.00 (4× $500), Target 21 cards $1,030.00. Total: $3,631.69.
+- Depleted cards (131) retained as historical record. Purchase dates all placeholder `2024-01-01` — actual dates not available from ledger.
+- Note: Kohl's depleted $100 cards correspond to real orders in the system; gift card ↔ order linkage will be resolved when email enricher agents are built.
+- purchase_price = face_value for all non-LEGO cards (no discount data available; update manually if known).
+
+**Email agent architecture design (see Email Agent Architecture section in Start Here):**
+- Decision: one configurable `email_enricher.py` agent, not 7 separate agents.
+- Per-retailer parser modules, shared A-007 matching cascade, shared review queue, shared write path.
+- Copy-to-business approach (extend Agent 1B Mode 4 pattern) rather than Gmail forwarding filters.
+- Agents fill: order number, retailer, date, line items, GWP flags, totals, rewards earned, CC last 4.
+- Agents never fill: gift_card_last4, buy_reason, purchase_trigger, cashback_rate.
+
+**Files modified this session:**
+- `ADR-021-fifo-costing-method.md` — new
+- `ADR-022-cashback-treatment-capital-one-chain.md` — new
+- `CONTEXT.md` — costing method row updated, DECISION 020 added
+- `SESSION_LOG.md` — this update
+
+**Commit message:**
+```
+Cowork 2026-06-26: ADR-021 (FIFO locked), ADR-022 (cashback Layer 4 + C1 chain), DECISION 020
+```
+
+---
+
+### Cowork 2026-06-22 — Order Entry + Gift Card Bulk Load + ADR-019 ✓ Done — 2026-06-22
+
+**Context:** Outside VS Code, Cowork chat session. Continuation of pre-S10 order capture + gift card loading work.
+
+**Gift card bulk load — 36 LEGO cards into Supabase:**
+- lgc_2026.xlsx sanitized: full card numbers → last 4 digits only (security). Access codes stay in local spreadsheet only — never in Supabase or any file.
+- 35 new LEGO gift cards inserted into `gift_cards` table; GC *2275 (inserted earlier same session, purchase_date placeholder corrected from 2026-06-22 → 2026-06-14).
+- All 36 cards: retailer=LEGO, face_value=$250, purchase_price=$225, discount_pct=10%, source=giftcards.com, source_type=third_party, cashback_expected=$3.38 (1.5% CC cashback), cashback_status=pending.
+- Purchase dates: Jun 14 (18 cards, *1863–*2333), Jun 17 (6 cards, *0011–*0177), Jun 20 (6 cards, *0597–*0225), Jun 21 (6 cards, *0494–*0627).
+- Total face value loaded: $9,000.
+- `lego_gift_cards_master.csv` updated: 24 existing lgc_2026 rows enriched with purchase metadata (amount_paid, discount_pct, purchase_date, balance, status, notes); 12 new rows added for Jun 20/21 cards. Total: 385 rows.
+
+**3 LEGO orders entered into Supabase:**
+
+| Order | Date | Subtotal | Tax | Total | GC(s) | Sets | GWP | Insiders Pts |
+|-------|------|----------|-----|-------|-------|------|-----|-------------|
+| T508041747 | 2026-06-22 | (from prior session context) | | | | | 40902 | 2× |
+| T508056398 | 2026-06-22 | $152.96 | $16.37 | $169.33 | *2309 ($169.00) + Visa ••••3013 ($0.33) | 72032, 42658, 31208, 11204 | 40902 | 1989 (2×) |
+| T508059246 | 2026-06-22 | $154.95 | $16.58 | $171.53 | *2325 ($171.53) | 11043×4, 31378 | 40902 | 2015 (2×) |
+
+- All orders: order_status=confirmed, cost_basis_state=estimated, shipping_address=Edmonds WA.
+- All have GWP 40902 (Tribute to Leonardo da Vinci): unit_price=$0.00, gwp.status=pending, cost_basis_treatment=proceeds_reduce_order (Philosophy C).
+- GC *2309 remaining balance after T508056398: $81.00. GC *2325 remaining balance after T508059246: $78.47.
+- Columns confirmed live during this session: subtotal, tax_paid, total, insider_points_earned (not subtotal_amount etc). gwp table: market_value (not msrp). gift_card_assignments: applied_date NOT NULL.
+
+**ADR-019 — Order Settlement Gate:**
+- Drafted and written to `C:\Users\joshu\Documents\ResellOS\ADR-019-order-settlement-gate.md`.
+- DECISION 019 added to CONTEXT.md Architecture Decisions table.
+- Three trigger events that prompt a settlement review: (1) a unit from this order sells on Walmart (FIFO match), (2) any GWP from this order sells, (3) 12-month window from order_date elapses.
+- Three conditions that must be met before `cost_basis_state` → `settled`: cashback_status='confirmed' for all cashback_transactions rows on this order, all GWPs resolved (sold/retained/donated/lost) or 12-month window elapsed, current cost_basis_state='placed'.
+- Override allowed with required `override_note` field for edge cases.
+- At settlement: `true_cost_basis` locks permanently; `extended_cost_basis` continues to accumulate carrying cost; any returns after settlement → `pl_adjustments` table only.
+- FIFO is per-order (acquisition event), not per-unit (sale event). GWP $0 cost basis is permanent and correct under Philosophy C.
+- **Note on ADR numbering:** ADR-019 is now taken by the settlement gate. The FIFO costing method decision (previously noted as "write ADR-019") will be ADR-021 (ADR-020 = cost basis regression testing, proposed).
+
+**Multi-retailer gift card ledger scoped:**
+- lgc_2026.xlsx confirmed to have 5 retailer tabs: lego, GC (giftcards.com — contains LEGO cards), B&N, WM, Kohl's, Target.
+- Supabase `gift_cards` table has `retailer` column — one table handles all retailers, no separate tables needed.
+- Non-LEGO tabs (WM, Target, B&N, Kohl's) will be read, sanitized, and imported into Supabase in next Cowork session. Historical spend tracking on non-LEGO cards is incomplete — forward-track from today; historical gap is acknowledged.
+- Cards have access codes (PINs) — these stay in local spreadsheet only. lego_gift_cards_master.csv is LEGO-specific; Walmart/other GC tracking will be done directly in Supabase from this point.
+- Full card numbers never stored. Access codes never stored.
+
+**GWP Philosophy C + FIFO confirmed:**
+- GWP $0 cost basis is permanent and correct. Net proceeds reduce originating order economic cost (Layer 5) when GWP sells.
+- FIFO settlement is per-order (acquisition event), not per-unit (sale event). All units from one order share the same cost basis calculation.
+- cashback and GWP sale are the two cost basis update events after order entry. Rakuten is the most automatable (email-matchable by order number). Cap1 and RetailMeNot will need manual capture.
+
+**Files modified this session (local, need GitHub commit):**
+- `C:\Users\joshu\Documents\ResellOS\ADR-019-order-settlement-gate.md` — new file
+- `C:\Users\joshu\Documents\ResellOS\CONTEXT.md` — DECISION 019 added
+- `C:\Users\joshu\Documents\ResellOS\lego_gift_cards_master.csv` — updated
+
+**Commit message:**
+```
+Cowork 2026-06-22: 3 orders entered, 36 LEGO GCs loaded, ADR-019 (settlement gate), DECISION 019 in CONTEXT.md
+```
+
+---
+
+### Cowork 2026-06-21 (part 2) — Data Validation Layer Built ✓ Done — 2026-06-21
+
+**Context:** Continuation of the same Cowork session (see part 1 below). Josh asked to build agents that review invoice/order data before it's written and catch cost-basis issues — built directly in Cowork rather than handed off to Claude Code, since Cowork now has write access to this repo.
+
+**New files:**
+- **`order_validators.py`** — shared pre-write checks, called from both Agent 1A (`db_writer.write_invoice`) and Agent 02 (`agent_02_order_entry.write_order`) right before their write-confirmation prompt. Never blocks, only warns (matches the existing warn-then-ask pattern already in agent_02). Checks: cross-shipment duplicate set_number (the documented "duplicate line items" risk — confirmed zero exist today via live query, but nothing previously stopped a new one), GWP-flag-vs-price agreement (agent_02 currently lets `is_gwp` and the price paid disagree — a real gap, not theoretical), missing set_number (informational), line-items-sum-vs-expected-subtotal.
+- **`cost_basis_checks.py`** — read-only checks on what Agent 08 (Mode 1) actually wrote to inventory: every GWP unit is exactly $0.00 cost basis, unit count matches line-item quantities, surfaces the known `tax_paid_allocated` always-0 gap as a standing reminder. Scope note: gift card savings (Layer 2) is collected interactively in Mode 1 and never persisted anywhere, so a true independent re-derivation of `net_economic_cost` isn't possible from stored data alone — flagged as a new open question (see below), not fixed this session.
+- **`cost_basis_status_report.py`** — read-only report answering "which orders need a human to go run Agent 08?" Not an auto-advancer — DECISION 017 deliberately keeps cost basis behind explicit confirmation, and that's correct for a financial system. This is the missing reminder, not automation: flags orders where Mode 1 has never run, where GWP is still pending (genuinely blocks settlement per `mode_compute`'s M2 logic), or where cashback is pending (does NOT block settlement in the real code — surfaced as a note, not a blocker, after first writing it the other way and catching the mismatch in code review).
+
+**Real finding from running the report's logic live against Supabase:** all 5 orders currently have zero inventory rows — Mode 1 has never been run on any of them, including T487170400 whose GWP fully sold and settled back on 2026-05-27. Confirms the "nothing reminds anyone an order is ready" gap directly.
+
+**Code review (resell-os-code-review skill, 4-pass) — no CRITICAL issues.** MODERATE: status report's cashback-pending status didn't match `mode_compute`'s actual gating (only GWP blocks settlement, not cashback) — fixed before logging this entry. MINOR (fixed): `set_number` whitespace not normalized before duplicate comparison; `client or get_client()` truthiness pattern tightened to `is not None`. MINOR (not fixed, low priority): `print_warnings` duplicated with different signatures across two files; per-order queries in the status report are N+1-shaped and would want batching once order volume grows well past today's 5.
+
+**Environment note:** the Cowork sandbox's bash mount repeatedly showed stale/truncated content for files edited multiple times in one session (`db_writer.py`, `order_validators.py`, `cost_basis_checks.py` all intermittently failed `py_compile` via bash with truncation errors that did not match the real file). The Read/Edit/Write/Grep tools consistently showed correct, complete content throughout — confirmed by full re-reads. Treat bash-side verification of recently-edited files with suspicion in Cowork; trust the Read tool. Could not run the new scripts end-to-end against Supabase from this bash sandbox either — the sandbox's network egress blocks the Supabase REST domain directly (the dedicated Supabase MCP tool reaches it fine; raw `httpx`/`supabase-py` from bash does not). Logic was verified by running equivalent SQL through the MCP tool instead.
+
+**New open questions added (see Open Questions section):** (1) gift card savings (Layer 2 input) isn't persisted anywhere, blocking any future audit of a cost-basis run; (2) none of the 5 live orders have ever had Mode 1 run on them.
+
+**Not done this session (deferred):** wiring `cost_basis_checks.py` / `cost_basis_status_report.py` into a single CLI entry point (right now they're three separate scripts); the ADR-020 pytest-style regression suite itself (`/tests/test_cost_basis.py`) — these validators are upstream of that work, not a replacement for it.
+
+**Commit message:**
+```
+Cowork 2026-06-21 (2): data validation layer — order_validators.py, cost_basis_checks.py, cost_basis_status_report.py, wired into Agent 1A + Agent 02, code-reviewed
+```
+
+---
+
+### Cowork 2026-06-21 (part 1) — Architecture Review, Cost-Basis Test Gap, Data Consolidation, Cross-Surface Context Fix ✓ Done — 2026-06-21
+
+**Context:** Outside VS Code, Cowork chat session. Started as a software-development-consultant style architecture review, then a deep dive into one finding, then a tooling/process conversation.
+
+**Architecture review — punch list + ADR-020:**
+- Reviewed Master Architecture Document (v2.1), Project Map (v2.0), and SESSION_LOG.md.
+- Strongest existing decisions: cost basis locking at settlement (DECISION 011), order edit lifecycle / cost basis trigger gate (DECISION 017), multi-vertical catalog schema designed ahead of need.
+- Highest-leverage gap identified: the cost basis engine (`agent_08_cost_basis.py`) has no automated regression suite — correctness gate is manual code review + one golden-record order (T487170400). Manual review already caught 2 CRITICAL bugs in this exact module in S08, which is a leaky-net signal, not a solid one.
+- **`ADR-020-cost-basis-regression-testing.md`** written and saved in repo root (status: Proposed). Recommends a small fixture-based test suite (T487170400 + Barnes Scrapyard rewards case + the 4 known S08 minor-deferred bugs) before Agent 1C's ~635-order historical backfill runs at scale, since settled cost basis can't be corrected after the fact — only adjustment entries.
+- Two items originally flagged in the review were corrected by Josh and are NOT open concerns: (1) the 2026-06-20 authenticated-scraping approach is an intentional, acknowledged stopgap until a Chrome extension + Purchase Planner replace it — not a long-term architecture risk needing hardening right now; (2) FIFO and cashback tax treatment are NOT CPA-blocked — the June 10 CPA meeting concluded both are personal-preference choices the CPA will accommodate either way (see Open Questions update below).
+
+**Real data check — cost basis state machine doesn't self-advance:**
+- Queried Supabase directly (project `svztskmvugggdaysqbsj`). Confirmed: only 5 orders exist total. Only T487170400 has GWP records (all 3 line items `status = sold`, `settlement_date` populated 2026-05-27) — but `orders.cost_basis_state` for that order still reads `estimated`, never advanced to `provisional` or `settled`. Only one `cashback_transactions` row exists (order T504031563, `status = pending`).
+- Finding: there isn't yet enough real order variety to build the full "what's known vs. pending" test matrix Josh described (gift card/rewards known instantly, cashback resolves within ~120 days, GWP within 14 days–12 months), and the one fully-resolved order never had its status field updated — the state machine exists in schema but nothing is actively driving transitions yet. Flagged as a prerequisite to building the ADR-020 test suite properly.
+
+**Data consolidation — fixed a real fracturing problem:**
+- Found that working files for the LEGO order-scrape backlog had been saved into the Claude Project folder **"ResellOS software development"** instead of this repo, including `brickprobe_purchases_2026-06-19.csv` (this is what "Brickprobe" turned out to be — a file, not a separate tool). Unintentional drift from a prior Cowork session defaulting to the wrong connected folder.
+- Moved into this repo (root): `brickprobe_purchases_2026-06-19.csv`, `lego_gift_cards_master.csv`, `lego_orders_todo.txt`, `lego_order_numbers_master.txt`, `lego_priority3_line_items.csv`, `lego_priority3_manual_worklist.csv`, `lego_priority3_orders.csv`, `lego_scrape_priority.csv`, `order_gift_card_links.csv`, and `skills/lego-order-capture/SKILL.md`.
+- Deleted the originals from the "ResellOS software development" folder after confirming the copies landed (required an explicit Cowork file-delete permission grant from Josh). That folder is now empty. **CONTEXT.md's "LEGO Order Scrape — Priority System" section updated to reflect the new file location.**
+- Obsidian / ResellOS-Knowledge vault was left untouched — out of scope for this cleanup by design.
+
+**Connector check — GitHub, Gmail, Drive confirmed live in Cowork:**
+- `get_me` confirmed GitHub connected as `theroyalcrate`. Gmail `list_labels` confirmed the connected account is the actual ResellOS business inbox (`theroyalcratellc@gmail.com`, labels `ResellOS-Invoices` / `ResellOS-Filed`). Drive `list_recent_files` confirmed the same account's Lego folder structure and scrape files.
+- Resolves the open question below about GitHub MCP connectivity, at least for the Cowork/chat surface. Distinct from whatever Claude Code/VS Code uses locally — if Claude Code still has trouble with its own GitHub MCP, that needs its own separate check.
+
+**GSD ("get-shit-done") investigated and rejected:**
+- Josh asked about connecting the GSD/"get-shit-done" Claude Code framework (meta-prompting / spec-driven workflow) for its skill/agent loop.
+- Investigation found: the original maintainer (TÂCHES) went silent ~7 weeks, deleted his accounts, and a crypto token tied to the project was independently reported by multiple outlets as a ~$500K rug pull. The original npm package is permanently compromised — that maintainer can still push updates to it at will.
+- The community fork (`open-gsd/get-shit-done-redux`) was independently security-audited: no backdoor found, but the audit flagged unresolved gaps — safety hooks are advisory-only (warn, don't block), and a documented file-read pattern (`@~/...`) could be tricked into inlining secrets like SSH keys or credentials into the AI's context.
+- **Decision: do not install GSD (original or redux) into this repo.** This repo holds live credentials (`.env`, `credentials/`, OAuth tokens) that make that specific risk concrete, not theoretical. Logged as a guardrail in CONTEXT.md.
+
+**Cross-surface context drift — root cause found and fixed:**
+- This session started from a stale Claude-Project-knowledge snapshot of CONTEXT.md (dated 2026-06-04) instead of the live repo file (last touched 2026-06-18) — directly demonstrating the "memories get lost between chat, Cowork, and Claude Code" problem Josh raised.
+- Root cause: the Claude.ai Project kept a separate pasted-in copy of CONTEXT.md/SESSION_LOG.md that drifted out of date, and Cowork sessions were defaulting to that stale snapshot instead of reading the live repo files they already had direct access to.
+- Fix: Josh deleted the stale CONTEXT.md/SESSION_LOG.md copies from the Claude Project's knowledge files (2026-06-21) — this repo is now the only copy. A new skill, **`skills/resell-os-session-start.md`**, instructs any Claude surface (chat, Cowork, or Claude Code) to read CLAUDE.md → CONTEXT.md → SESSION_LOG.md → `stages/CURRENT/CONTEXT.md` (if present) live from the repo (or fetched fresh from GitHub if no folder access) at the start of every ResellOS session, and to update SESSION_LOG.md at the end — never relying on memory or a cached copy.
+- **Manual step still needed from Josh:** add `resell-os-session-start` as an enabled skill in Settings → Capabilities so plain chat and Cowork actually load it (skills can't self-register from inside a session). Claude Code doesn't need this step — it already auto-loads CLAUDE.md every session, and CLAUDE.md already states the same read-order rule.
+
+**Commit message:**
+```
+Cowork 2026-06-21: architecture review (ADR-020 proposed), Supabase data check, project-folder consolidation, GSD security rejection, cross-surface context-drift fix + resell-os-session-start skill
+```
+
+---
 
 ### Pre-S10 Agent 1B+1C — Personal Gmail Backfill + Safety Filter ✓ Built — 2026-06-17
 
@@ -524,7 +706,7 @@ S04: Fix split payment capture — collect all payment legs, set mixed
 
 ## Open Questions
 
-**CPA/Attorney Meeting — June 10, 9:00-9:30am:** (1) Confirm FIFO — locks permanently once data accumulates. (2) Cashback/credit card rewards — cost reduction or income? Determines whether cashback layer activates. (3) WA State tax recovery — reduces COGS retroactively or separate income in period received? (4) S-Corp vs Schedule C — at $72K net profit year one, 2026 or 2027? (5) Capital One Shopping chain — cashback → Macy's gift card → inventory. Does rebate treatment follow the chain or does gift card redemption create a new cost basis event?
+**CPA/Attorney Meeting — June 10, 9:00-9:30am (all three previously-open decisions now resolved 2026-06-26):** (1) ✅ FIFO — locked as ADR-021. (2) ✅ Cashback/credit card rewards — Layer 4 active, rebate treatment. ADR-022. (3) WA State tax recovery — still open: reduces COGS retroactively or separate income in period received? (4) S-Corp vs Schedule C — still open. (5) ✅ Capital One Shopping chain — resolved: chain ends at GC acquisition, price_paid = $0. ADR-022.
 
 **LEGO Set Number Mapping — resolved for parser:** Parser now captures set_number (Pre-S08 task complete). Still needed: Set Reference Agent — local DB of all LEGO sets with retirement status, EOL date, UPC, EAN, dimensions. Source: Brickset API (validate vs Bricktap lists on 20-30 sets first). LEGO.com catalog endpoints — rewatch Brick Dynasty episode. Initial seed from Bricktap retirement lists.
 
@@ -552,9 +734,19 @@ S04: Fix split payment capture — collect all payment legs, set mixed
 
 **S08 Minor Deferred Items — cleanup sprint in S09:** tax_paid_allocated always 0. Mode 3 never writes gwp.settlement_date. Dead elif branch in collect_gwp_proceeds. net_economic_cost calculated twice. _test_setup_t487170400.py → /tests.
 
-**GitHub MCP not connecting:** Does not appear under connections. Standalone troubleshoot. Chat-Claude cannot reach GitHub or local repo regardless — route local file work through Claude Code.
+**~~GitHub MCP not connecting~~** ✅ RESOLVED 2026-06-21 — confirmed live in Cowork via `get_me` (connected as `theroyalcrate`). Gmail and Google Drive also confirmed live and connected to the real ResellOS business account. If Claude Code's own local GitHub MCP still has trouble, that's a separate check.
 
-**Stale project Instructions field:** The project's Instructions panel still holds the old 2026-05-26 context. Sync it to the current context doc so fresh conversations don't start stale.
+**~~Stale project Instructions field~~** ✅ RESOLVED 2026-06-21 — superseded by a bigger fix: the pasted CONTEXT.md/SESSION_LOG.md copies were deleted from the Claude Project's knowledge files entirely, and the `resell-os-session-start` skill now directs every surface to read live from this repo instead. Josh still needs to add the skill in Settings → Capabilities for plain chat and Cowork (see Cowork 2026-06-21 session card).
+
+**Cost basis state machine doesn't self-advance (new 2026-06-21):** Confirmed against live Supabase data — order T487170400 has all GWP fully sold and settled, but `orders.cost_basis_state` never moved off `estimated`. The estimated → provisional → settled states exist in schema but nothing currently drives the transition automatically. Needs a real trigger (cron, agent run, or explicit step) before the ADR-020 test suite can be considered meaningful — testing a state machine that never advances proves little.
+
+**Cost basis regression testing — ADR-020 (Proposed, 2026-06-21):** See `ADR-020-cost-basis-regression-testing.md` in repo root. Recommends a small fixture-based test suite for `agent_08_cost_basis.py` before Agent 1C's ~635-order historical backfill runs at scale. Not yet built — next concrete step is creating `/tests/test_cost_basis.py` with the T487170400 fixture.
+
+**Gift card savings (cost basis Layer 2) is never persisted (new 2026-06-21):** `agent_08_cost_basis.py`'s Mode 1 collects gift card savings interactively each run and uses it in that one calculation, but never writes it anywhere. There's no way to independently audit or re-derive a past `net_economic_cost` from stored data alone — only the final per-unit `inventory.cost_basis` survives. Worth a small schema addition (e.g. persist the layer inputs somewhere) before this matters at scale.
+
+**None of the 5 live orders have ever had Mode 1 run on them (new 2026-06-21):** confirmed live — every order, including T487170400 whose GWP fully sold a month ago, still has zero inventory rows. `cost_basis_status_report.py` (built this session) surfaces this; running it periodically is currently a manual habit, not automatic (DECISION 017 means it shouldn't be automatic).
+
+**Do not install GSD / "get-shit-done" into this repo (new 2026-06-21):** Original maintainer confirmed compromised (crypto rug-pull, retains npm publish rights to the original package). Community fork (`get-shit-done-redux`) audited clean of backdoors but has unresolved advisory-only security guardrails and a file-exfiltration risk pattern. This repo holds live credentials (`.env`, `credentials/`, OAuth tokens) — don't install either version here. See CONTEXT.md guardrail note.
 
 ---
 

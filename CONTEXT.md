@@ -1,8 +1,8 @@
 # ResellOS — Claude Context Document
-**Last Updated: 2026-06-20**
+**Last Updated: 2026-06-28**
 **Read this first. This document orients Claude at the start of every conversation.**
 
-> **Document home & sync rule:** The source-of-truth copy lives in the GitHub repo (`theroyalcrate/ResellOS`), edited via Claude Code. An identical copy lives in the Claude project here so chat-Claude starts every conversation current. **When this doc changes: update the repo copy via Claude Code first, then paste the same content into the project copy.** Keep them identical — drift between the two causes re-walking already-completed work.
+> **Document home & sync rule (revised 2026-06-21):** This repo is the only copy. The previous "identical copy pasted into the Claude project" was deleted on 2026-06-21 because it kept drifting out of date and caused sessions to start from stale context (this exact conversation started from a 2026-06-04 snapshot while this file had moved on to 2026-06-18). Every Claude surface — plain chat, Cowork, or Claude Code — now reads this file (and SESSION_LOG.md, and CLAUDE.md) live from the repo, or fetches it fresh from GitHub if it has no folder access. Never rely on memory or a cached copy. Enforced by the `resell-os-session-start` skill (`skills/resell-os-session-start.md`) — see CONTEXT.md → "How to Use This Document" below.
 
 ---
 
@@ -32,7 +32,7 @@ Core transactions, cost basis, inventory, and sales always live in the user's ow
 - **Language:** Python 3.14 with virtual environment
 - **Version control:** GitHub — repo: theroyalcrate/ResellOS
 - **Development environment:** VS Code + Claude Code extension
-- **MCP connectors connected:** Supabase ✓, GitHub ✓ (read access confirmed 2026-06-03 via Claude Github 3 connector. Chat-Claude can read the repo directly — CONTEXT.md and SESSION_LOG.md no longer need to be pasted into the project copy manually. Writes still route through Claude Code.)
+- **MCP connectors connected:** Supabase ✓, GitHub ✓ (read access confirmed 2026-06-03, re-confirmed live in Cowork 2026-06-21 via `get_me`. Chat-Claude can read the repo directly — there is no project copy to paste into anymore. Writes still route through Claude Code.) Gmail ✓ and Google Drive ✓ also confirmed live in Cowork 2026-06-21 — connected to the actual ResellOS business account (`theroyalcratellc@gmail.com`), same inbox/Drive Agent 1B and Agent 1C use.
 - **Knowledge vault:** Obsidian + ResellOS-Knowledge private GitHub repo (theroyalcrate/ResellOS-Knowledge). PARA structure: Projects / Areas / Resources / Archive. Business logic patterns live at Areas/business-logic/. Set up 2026-06-01.
 
 ---
@@ -140,7 +140,7 @@ All 7 retailers have full reward profiles built in Agent 02:
 `is_retiring` (line-item level) defaults TRUE on every line item. User only toggles if they know a set is NOT retiring. No extra prompts — friction kills consistency. This is a **different axis** from buy_reason: a fact about the *set*, not the purchase *intent*.
 
 ### FIFO costing method
-Selected (Decision 002). Must confirm with CPA before year-end. Do not change after real data accumulates — retrofitting requires recalculating every true_cost_basis ever written.
+Locked 2026-06-26 (ADR-021). CPA confirmed this is a personal-preference choice — not CPA-mandated. Do not change after data accumulates — retrofitting requires recalculating every true_cost_basis ever written.
 
 ### Washington State tax recovery
 Tax captured at invoice parse time — static known number. Included in Layer 1 economic cost. When recovered after filing, flows as P&L credit not a cost basis change. Cost basis does not reopen.
@@ -213,7 +213,7 @@ Monthly snapshots capture per-unit carrying cost rate. Extended cost basis = tru
 
 **Split shipments:** One LEGO order can produce multiple invoice PDFs. Shipments table handles correctly.
 
-**Duplicate line items (data hygiene, open):** Some early orders have a set represented twice — once from the parser and once from manual Agent 02 entry. Cross-path historical artifact, NOT an ongoing bug. Must be cleaned before further cost-basis work. Email agents must enrich existing orders, never duplicate line items.
+**Duplicate line items (data hygiene) — guarded against as of 2026-06-21:** Some early orders have a set represented twice — once from the parser and once from manual Agent 02 entry. A live check 2026-06-21 found zero current duplicates. `order_validators.py` (new) now checks for this cross-shipment collision before every write in both `db_writer.write_invoice` (Agent 1A) and `agent_02_order_entry.write_order` — warns, never blocks. Email agents must still enrich existing orders, never duplicate line items, when they're built.
 
 **Email order-matching cascade (A-007 — 2026-06-03):**
 Every incoming email is matched to an existing order via a strength-ordered cascade — never creates duplicate line items, never auto-merges on basket alone. This is the cross-path idempotency guard flagged as missing in S8.5. Applies to all per-retailer email agents.
@@ -285,7 +285,7 @@ Capture screenshots of current reselling software using Claude in Chrome. Annota
 | Decision | What Was Decided |
 |----------|-----------------|
 | Database | Supabase PostgreSQL — permanent. No SQLite. No migration planned. |
-| Costing method | FIFO — confirm with CPA before year-end |
+| Costing method | FIFO — locked 2026-06-26 (ADR-021). CPA confirmed this is a personal-preference choice. Do not change after data accumulates. |
 | GWP cost treatment | Philosophy C — proceeds_reduce_order. Configurable per user. |
 | Cost basis locking | Locks at settlement. Returns create P&L adjustments, never reopen cost basis. |
 | Negative cost basis | Valid and correct output. Never suppress. |
@@ -304,27 +304,28 @@ Capture screenshots of current reselling software using Claude in Chrome. Annota
 | Hit list design | Status layer on product_catalog. active → purchased → abandoned. Abandoned preserves history. Notes field = sourcing journal. Purchase Planner consumes as input queue. (Decided 2026-05-31) |
 | Order edit lifecycle & cost basis trigger gate | Order status values: stub → pending_review → confirmed → placed → settled. Cost basis gated behind explicit user confirmation — never auto-runs on a stub or partial order. Email agents fill: order number, retailer, date, line items, GWP flags, totals, rewards earned, CC last 4. Agents never fill: gift_card_last4, buy_reason, purchase_trigger, cashback_rate. Confirmed → atomic write: cost basis + gift card balance debit. Reopening to pending_review reverses the prior balance reduction. Settled → P&L adjustments only, cost basis locked permanently. (DECISION 017, 2026-06-01) |
 | Per-retailer tax behavior (rewards_reduce_taxable_base) | Per-retailer boolean flag, default false. true = promo-cash/coupons are pre-tax discounts that reduce the taxable base; engine must use actual invoice tax, never recompute it. Set only from real invoice evidence — never assumed. Kohl's = true (confirmed 5 orders). Macy's = false (confirmed 2026-06-07 — Star Money is post-tax tender). (DECISION 018, 2026-06-05) |
+| Order settlement gate — conditions for cost_basis_state → settled | Settlement is always manual — never auto-advances. Trigger events that raise a settlement_review_flag: (1) a unit from the order sells through Walmart (FIFO match), (2) a GWP from the order sells (Layer 5 applied), (3) 12-month provisional window elapses. All three conditions must pass before settlement is permitted: cashback_status = 'confirmed' for every cashback_transactions row on the order (override allowed with required note); all GWPs resolved (sold/retained/donated/lost) or 12-month window elapsed; cost_basis_state = 'placed'. At settlement: true_cost_basis locks permanently, extended_cost_basis continues updating. Returns after settlement → pl_adjustments table only, never reopen cost basis. Cashback platform priority: Rakuten (email-matchable) → Cap1 (manual) → RetailMeNot (manual). Settlement is per-order (acquisition event), not per-unit — does not require all inventory units sold. (DECISION 019, 2026-06-22) |
 | Dual-account retailer architecture | Amazon and Walmart each have Business and Personal accounts with different tax treatment. `retailer_profiles` needs `account_type text DEFAULT 'default'` column + updated unique constraint `UNIQUE (user_id, retailer_key, account_type)`. Will be Migration 013 (012 taken by invoice_files). Affects both Amazon and Walmart — design once, apply to both. |
 | Invoice filing (Agent 1B) | `invoice_files` Supabase ledger (migration 012) keyed on `gmail_message_id` — dedup key, checked before any write. One row per email. Gmail two-stage label move: `ResellOS-Invoices` (intake, `Label_2573281147792874926`) → `ResellOS-Filed` (processed, `Label_1`). Drive path: `Invoices/{Retailer}/{Year}/{Month Year}/`. OAuth credentials in `credentials/` (gitignored). (2026-06-10) |
-| Authenticated account scraping vs. enrichment scraping (data acquisition boundary) | Two different trust tiers, two different tools. **Authenticated account data** (LEGO order history, gift card balances — anything behind a login) is only ever pulled through the user's own already-authenticated real browser session (Claude in Chrome), one order at a time, at a deliberately slow/human-paced rate, and never run concurrently with the user actively placing orders on the same site. Never use a third-party scraping/proxy service (e.g. Apify) for this tier — proxy rotation is built for anonymous public-page rate-limit evasion, and using it against a logged-in account (new IP/datacenter authenticating with the user's credentials) looks like account-takeover behavior to retailer fraud detection, risking an account lock — a far worse failure mode than a rate limit. **Public/enrichment data** (deal alerts, stock levels, set/retirement data) has no such constraint — it's not account-bound and not load-bearing per the "own your data, rent enrichment" principle, so Apify or similar scraping services are the right tool there; proxy rotation does exactly what it's designed for on anonymous public pages. (Decided 2026-06-20) |
+| Authenticated account scraping vs. enrichment scraping (data acquisition boundary) | Two different trust tiers, two different tools. **Authenticated account data** (LEGO order history, gift card balances — anything behind a login) is only ever pulled through the user's own already-authenticated real browser session (Claude in Chrome), one order at a time, at a deliberately slow/human-paced rate, and never run concurrently with the user actively placing orders on the same site. Never use a third-party scraping/proxy service (e.g. Apify) for this tier — proxy rotation is built for anonymous public-page rate-limit evasion, and using it against a logged-in account (new IP/datacenter authenticating with the user's credentials) looks like account-takeover behavior to retailer fraud detection, risking an account lock — a far worse failure mode than a rate limit. **Public/enrichment data** (deal alerts, stock levels, set/retirement data) has no such constraint — it's not account-bound and not load-bearing per the "own your data, rent enrichment" principle, so Apify or similar scraping services are the right tool there; proxy rotation does exactly what it's designed for on anonymous public pages. (Decided 2026-06-20) **Note (2026-06-21): this whole approach is an intentional, acknowledged stopgap** — it backfills orders invoices never captured. The real long-term design is a browser extension that captures order details at the point of purchase, working with the Purchase Planner (Phase 2/4), with invoice parsing confirming/reconciling afterward. Don't over-invest in hardening today's scraping approach; revisit this row when the Chrome extension gets designed. |
+| Cashback tax treatment — Layer 4 active; Capital One chain ends at GC acquisition | Cashback is rebate treatment (cost reduction), not income. Layer 4 activated for cash payouts (Rakuten, RMN, etc.). Capital One Shopping can only redeem as gift cards — the chain ends when the GC is acquired at price_paid = $0. Layer 2 handles the discount from there. New `cashback_transactions.status = 'redeemed_as_gc'` prevents double-counting. agent_07 Mode 2 needs a cash/GC branch for C1 payouts. Layer 4 skips `redeemed_as_gc` rows. (DECISION 020, ADR-022, 2026-06-26) |
+| Third-party agent frameworks — do not install into this repo (Decided 2026-06-21) | Investigated GSD ("get-shit-done", a Claude Code meta-prompting/spec-driven-development framework) on Josh's request. The original maintainer (TÂCHES) went silent ~7 weeks, deleted his accounts, and a crypto token tied to the project was independently reported by multiple outlets as a ~$500K rug pull — the original npm package is permanently compromised; that maintainer can still push malicious updates to it at will. The community fork (`get-shit-done-redux`) was independently security-audited and found free of backdoors, but the audit flagged unresolved gaps: its safety hooks are advisory-only (warn, don't block), and a documented `@~/...` file-read pattern could be tricked into inlining secrets (SSH keys, credentials) into the AI's context. **This repo holds live credentials** (`.env`, `credentials/`, OAuth tokens) that make that risk concrete, not theoretical. Decision: do not install GSD — original or redux — into this repo. If ever tried, only in a throwaway sandbox with no real credentials. |
 
 ---
 
-## CPA/Attorney Meeting — June 10, 9:00-9:30am
+## CPA/Attorney Meeting — June 10, 9:00-9:30am (outcome clarified 2026-06-21)
 
-Questions to answer before year-end:
-
-1. **Confirm FIFO** as the costing method. Locks permanently once data accumulates.
-2. **Cashback and credit card rewards** — cost reduction (rebate treatment) or income? Affects whether cashback layer in cost basis engine activates.
-3. **Washington State sales tax recovery** — does recovered tax reduce COGS retroactively or record as separate income in period received?
-4. **S-Corp vs Schedule C** — at $72K net profit year one, does S-Corp election make sense for 2026 or 2027?
-5. **Capital One Shopping chain** — cashback redeemed as Macy's gift card, then used for inventory. Does rebate treatment follow the chain or does gift card redemption create a new cost basis event?
+1. ✅ **FIFO as the costing method** — resolved 2026-06-26: FIFO locked as ADR-021. CPA confirmed personal-preference choice.
+2. ✅ **Cashback and credit card rewards — cost reduction or income** — resolved 2026-06-26: Layer 4 activated (ADR-022). Rebate treatment (cost reduction). C1 chain ends at GC acquisition.
+3. **Washington State sales tax recovery** — still open: does recovered tax reduce COGS retroactively or record as separate income in period received?
+4. **S-Corp vs Schedule C** — still open: at $72K net profit year one, does S-Corp election make sense for 2026 or 2027?
+5. ✅ **Capital One Shopping chain** — resolved 2026-06-26: chain ends at GC acquisition. GC recorded at price_paid = $0. Layer 2 handles the discount. See ADR-022.
 
 ---
 
 ## Open Questions (Unresolved)
 
-1. **CPA confirmation on FIFO** — confirm before year-end, do not change after data accumulates.
+1. ~~**CPA confirmation on FIFO**~~ ✅ RESOLVED 2026-06-26 — FIFO locked as ADR-021. Do not change after data accumulates.
 2. **Google Drive migration** — 15 months of historical invoices in personal Drive, need to move to business Drive before invoice archive automation can run.
 3. **Walmart Business rewards basis** — confirm whether 2% calculated on original order value or final total. Real example: $290 placed, $204 final, $8.40 credited.
 4. **Kohl's cancellation behavior (updated 2026-06-05)** — community sources say Kohl's Cash is retained on cancellation (not eliminated). Real risk is **stranded gift card balances**: gift cards are not auto-refunded; must call Kohl's to recover (replacement cards mailed). Verify Kohl's Cash retention against a real cancellation if one occurs.
@@ -333,11 +334,14 @@ Questions to answer before year-end:
 7. **agent_08 naming collision** — `agent_08_cost_basis.py` is named after session S08, but the conceptual agent numbering calls the cost basis engine "Agent 04" and reserves "Agent 08" for the unbuilt Product Catalog Agent (per CONTEXT.md Planned Future Systems). When Product Catalog is built, `agent_08_product_catalog.py` would collide with the existing file. Decide on a renaming convention before that session.
 8. **Brickset API validation** — validate retirement data against Bricktap lists on 20-30 sets before committing as primary sync source.
 9. **LEGO catalog endpoints** — Brick Dynasty creator pulls from LEGO directly. Rewatch episode to confirm approach before Set Reference Agent design session.
-10. **Cashback tax treatment** — pending CPA guidance June 10. Determines whether cashback layer in cost basis engine activates.
+10. ~~**Cashback tax treatment**~~ ✅ RESOLVED 2026-06-26 — Layer 4 activated (ADR-022). Rebate treatment (cost reduction). C1 chain ends at GC acquisition (price_paid = $0 on GC).
 11. **S08 minor deferred items** — cleanup sprint needed. tax_paid_allocated always 0. Mode 3 never writes gwp.settlement_date. Dead elif branch in collect_gwp_proceeds. net_economic_cost calculated twice. _test_setup_t487170400.py → /tests.
 12. **Backfill set_number on old line items** — parser captures set_number now, but rows written before that change have null. Re-parse old invoices to backfill.
 13. **Duplicate line items** — cross-path (manual + parser) historical artifact. Inspect and clean before further cost-basis work.
 14. **Unit-level inventory schema confirmation** — confirm one row per physical unit before building inventory layer. Unit-level rows enable Specific Identification costing; harder to retrofit later.
+15. ~~**Cost basis state machine doesn't self-advance**~~ — REFINED 2026-06-21: there isn't a state machine failing to advance — `cost_basis_state` only ever changes when a human runs Mode 1 or Mode 3 in `agent_08_cost_basis.py` (correct, per DECISION 017 — it should never run automatically). The real gap was that nothing reminded anyone an order was ready. Confirmed live: none of the 5 orders in the database have ever had Mode 1 run, including T487170400 whose GWP fully sold a month ago. Addressed with `cost_basis_status_report.py` (built 2026-06-21) — a status report, not an auto-advancer.
+16. **Cost basis regression testing — ADR-020 (Proposed, 2026-06-21)** — `agent_08_cost_basis.py` has no automated test suite, only manual code review + one golden-record order. See `ADR-020-cost-basis-regression-testing.md` in repo root. Recommended before Agent 1C's ~635-order historical backfill runs at scale. Not yet built.
+17. **Gift card savings (cost basis Layer 2) is never persisted (new 2026-06-21)** — `agent_08_cost_basis.py` Mode 1 collects it interactively and uses it in that one calculation, but writes it nowhere. No way to independently audit or re-derive a past `net_economic_cost` later — only the final per-unit `inventory.cost_basis` survives. Would need a schema addition before any cost-basis audit feature is possible.
 
 ---
 
@@ -345,7 +349,7 @@ Questions to answer before year-end:
 
 Historical LEGO order data is captured by walking the live LEGO order history page in the user's already-authenticated browser (Claude in Chrome). This is authenticated account scraping — see Architecture Decisions for the trust-tier boundary that governs it.
 
-**Where the files live:** Claude Project folder **"ResellOS software development"** (NOT this repo — they are working files, not committed code).
+**Where the files live (moved 2026-06-21):** This repo, root folder — same place as everything else. Previously these lived in a separate Claude Project folder called "ResellOS software development," which caused real data fragmentation (a Cowork session had defaulted to saving there instead of here). Consolidated into this repo on 2026-06-21; the old folder is now empty.
 
 | File | Contents |
 |------|----------|
@@ -355,7 +359,8 @@ Historical LEGO order data is captured by walking the live LEGO order history pa
 | `lego_gift_cards_master.csv` | Master gift card ledger being assembled from scrape + Brickprobe data |
 | `order_gift_card_links.csv` | Maps orders to the gift cards used to pay for them |
 | `brickprobe_purchases_2026-06-19.csv` | Brickprobe export (community LEGO purchase-tracking tool) used as cross-reference to avoid re-scraping orders that already have cost/GC data |
-| `lego_order_scrape.csv` | (This repo, repo root) Accumulated scrape output — one row per order |
+| `lego_order_scrape.csv` | Accumulated scrape output — one row per order |
+| `lego_priority3_orders.csv`, `lego_priority3_line_items.csv`, `lego_priority3_manual_worklist.csv` | Priority-3 (highest-value) scrape working set |
 
 **Priority tiers in `lego_scrape_priority.csv`:**
 
@@ -385,11 +390,11 @@ Historical LEGO order data is captured by walking the live LEGO order history pa
 
 ## How to Use This Document
 
-**At the start of every conversation:** Claude reads this document first. It provides enough context to be useful without searching multiple files or relying on potentially stale memory summaries.
+**At the start of every conversation, on every surface (revised 2026-06-21):** Read CLAUDE.md → CONTEXT.md → SESSION_LOG.md → `stages/CURRENT/CONTEXT.md` (if present) live from this repo before doing or claiming anything about ResellOS's state. If you only have GitHub access and no folder access, fetch the same three files fresh from `theroyalcrate/ResellOS` instead. Never rely on memory, a prior conversation's summary, or a previously pasted copy — there is no pasted copy anymore, and a cached one is exactly what caused this document to go stale before. This rule is enforced by the `resell-os-session-start` skill (`skills/resell-os-session-start.md`); if you're a Claude session that doesn't have that skill loaded, follow this paragraph anyway.
 
-**Two copies, kept in sync:** repo copy (source of truth, edited via Claude Code) and project copy (so chat-Claude starts current). When this doc changes, update the repo copy first via Claude Code, then paste identical content into the project copy. Drift between the two causes re-walking completed work.
+**One copy only:** This repo is the single source of truth. The old "paste an identical copy into the Claude project" arrangement was deleted 2026-06-21 — it drifted out of date repeatedly (this exact document was a full two and a half weeks stale at one point) and caused real rework. There is nothing left to keep in sync.
 
-**Tool access reality:** Chat-Claude (this interface) can reach Supabase directly but CANNOT reach the local repo, GitHub, or VS Code's filesystem. Claude Code can read/write the local repo but is a separate process. For anything touching local files, route through Claude Code.
+**Tool access reality:** Claude Code reads/writes this repo locally and always auto-loads CLAUDE.md. Cowork has direct folder access to this same repo when connected. Plain chat (no Cowork) has GitHub read access and can fetch these files fresh — it just can't write local files directly; route writes through Claude Code or through a GitHub commit.
 
 **When something changes:** Update this document at the end of any session where a significant decision was made, a new system was designed, or a known edge case was documented. A stale context doc is worse than no context doc.
 
