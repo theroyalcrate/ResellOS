@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Last Updated** | 2026-07-05 |
-| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓, Cowork 2026-07-05 (LEGO email parser spec + fixtures) ✓ |
+| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓, Cowork 2026-07-05 (LEGO email parser spec + fixtures) ✓, Cowork 2026-07-05 (eve — email enricher LEGO parser build) ✓ |
 | **Next Session** | S10 (variable-earn schema + Agent 1B live test) — all blocking decisions now resolved |
 | **Phase** | P1 — Week 2 |
 | **GitHub** | theroyalcrate/ResellOS |
@@ -92,6 +92,8 @@
 | Cowork 2026-06-26 | ADR-021 (FIFO locked), ADR-022 (cashback Layer 4 active + C1 chain ends at GC), DECISION 020 added to CONTEXT.md. Email agent architecture designed (one configurable agent, not 7 separate ones). | ✓ Complete |
 | Cowork 2026-06-28 | Non-LEGO GC import into Supabase: 175 rows (B&N 139, Kohl's 15, Target 21) from lgc_2026.xlsx. 44 active cards totaling $3,631.69 in available balance. CONTEXT.md + SESSION_LOG.md updated to close ADR-021/022 open questions. | ✓ Complete |
 | Cowork 2026-06-28 (eve) | Kohl's 2026 behavior changes documented in kohls.md (ResellOS-Knowledge vault): provisional earn model (~$70 drift, $530 final on June batch), unit repricing on partial cancel, promotional_cash status vocabulary (pending→issued→redeemed→expired), in-store WiFi free shipping tactic. No code changes. | ✓ Complete |
+| Cowork 2026-07-05 | LEGO email parser spec + 5 real fixtures + A-007 order-confirmation correction | ✓ Complete |
+| Cowork 2026-07-05 (eve) | `agents/email_enricher.py` — LEGO parser module (908 lines). 72 tests passing. 5 code-review bugs fixed. No live Gmail run. | ✓ Complete |
 | S10 | Phase 3: variable-earn schema + account_type migration (013) + Kohl's Cash block model (014) + all decisions now resolved + Agent 1B live test (all 5 modes) | ⏳ Next |
 
 ---
@@ -113,6 +115,49 @@
 ---
 
 ## Session History
+
+### Cowork 2026-07-05 (eve) — Email Enricher: LEGO Parser Module ✓ Done — 2026-07-05
+
+**Context:** VS Code / Claude Code session. Built `agents/email_enricher.py` from the spec and fixtures committed in the morning Cowork session.
+
+**New files:**
+- `agents/email_enricher.py` — 908 lines. One configurable email enricher with LEGO parser module. PARSER_REGISTRY architecture (per-retailer parsers, shared A-007 cascade, shared review queue, shared write path). Pure-logic parsing functions separated from I/O (same pattern as Agent 1B).
+- `tests/test_email_enricher_lego.py` — 72 tests in 8 classes, all passing. Covers all 5 fixture types, all 5 A-007 spec matching test cases, all parser trap edge cases.
+
+**Key design decisions implemented:**
+- A-007 Tier 1 cascade: order number is the only match key. Identical totals ($169.33 on two different orders) structurally cannot match — totals are never used.
+- Unmatched emails → stub orders with `order_status='pending_review'`. Never auto-delete, auto-merge, or auto-cancel.
+- Payment-declined emails: flag matched order for review (`ACT_FLAG_DECLINED`), or create `ACT_STUB_DECLINED` if no order found. Never auto-cancel.
+- Receipt emails forwarded to Agent 1A (`ACT_RECEIPT_PDF`) — no order-number matching possible from the envelope.
+- Gmail I/O wired (`fetch_lego_emails_from_gmail`) but GATED — no live run until Josh reviews. `_preview_fixtures()` mode confirmed working.
+- Field rules: NEVER fills `buy_reason`, `purchase_trigger`, `cashback_rate`, `gift_card_last4`. Cost basis never runs on agent-written data.
+- `is_retiring=True` on every line item (code-enforced, not relying on DB default).
+- `retailer="LEGO"` (uppercase, matching agent_02 stored values).
+- `no_invoice_received=True` on all email-enricher-created shipments (corrected by code review — enricher never has an invoice in hand).
+
+**Code review — 5 bugs fixed before commit:**
+1. `unit_price` suppressed negatives: `line_total > 0` → `line_total != 0` (CLAUDE.md rule 5)
+2. `no_invoice_received` was `False` on both `_build_shipment_row` and stub shipments → corrected to `True`
+3. `retailer` was `"lego"` (lowercase) → corrected to `"LEGO"` to match agent_02 stored casing
+4. `line_items` insert in stub path had no result check → now checked; failure returns `False` with message
+5. `ACT_FLAG_DECLINED` discarded the `.execute()` result → now checked; also adds `notes` field explaining the flag
+
+**Other code-review findings (not fixed — documented for awareness):**
+- Totals regex uses a 120-char lookahead; could grab a phone/zip number if LEGO adds promo text before the dollar amount. No fixture triggers this today.
+- Order number regex `T(\d{9})` has no trailing anchor — truncates 10-digit variants (theoretical; LEGO hasn't issued 10-digit T-numbers).
+- `ACT_CREATE_STUB` dedup guard skipped when `order_number` is empty — can create duplicate stubs on re-run if regex fails. Acceptable for now; gmail_message_id dedup would require a new column.
+- Mode 2 (live run) has no client construction in `main()` — `get_client()` is imported but not called. Wire when activating live mode.
+
+**First live run expectation:** T508133224, T508206446, T508221251, T507979974 should surface as pending_review stubs — the natural acceptance test for the enricher.
+
+**Not done (deferred):**
+- Live Gmail run (ask Josh before running)
+- Non-LEGO parser modules (target Kohl's next — repricing-review email spec already written)
+- `shipment_id` column on `line_items` (required for email-enricher writes — needs migration 015 or verify already added)
+
+**Files committed:** `agents/email_enricher.py`, `tests/test_email_enricher_lego.py`, `SESSION_LOG.md`.
+
+---
 
 ### Cowork 2026-07-05 — LEGO Email Parser Spec + Real Fixtures + A-007 Correction ✓ Done — 2026-07-05
 
