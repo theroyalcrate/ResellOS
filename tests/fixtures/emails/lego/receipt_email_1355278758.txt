@@ -1,0 +1,16 @@
+# FIXTURE: LEGO Shop receipt/invoice email (real email, captured 2026-07-05)
+# sender: no-reply-billing03@lego.com
+# subject: LEGO® Shop  Receipt 1355278758 from 07/01/2026   <-- NOTE: double space after "Shop"
+# gmail_message_id: 19f212ee4b51fd75  date: 2026-07-02T04:54:53Z
+# attachment: "LEGO® Shop  Receipt 1355278758 from 07/01/2026.pdf" (application/pdf)
+# note: body carries NO order number — invoice number + purchase date only (A-007 Tier 2).
+# The PDF is the payload; Agent 1A parses it. Email body below is the complete plaintext.
+
+Dear LEGO® Fan,
+
+Thanks for shopping with us! You'll find enclosed a copy of the invoice 1355278758 from your recent purchase 07/01/2026.
+Please keep it for your future reference.
+
+Happy building!
+
+Your LEGO® Service team

@@ -1,0 +1,19 @@
+# FIXTURE: LEGO payment declined (real email, captured 2026-07-05)
+# sender: Noreply@t.crm.lego.com
+# subject: Your payment was unsuccessful
+# gmail_message_id: 19f197de0b77f865  date: 2026-06-30T17:05:03Z
+# note: click-tracking URLs stripped. NEW email type — not previously documented in lego.md.
+# Order is held 5 business days, then presumably auto-cancelled. Order number + order date in body.
+
+Dear Joshua,
+
+Your payment for order T507979974, placed on 6/22/2026, has been declined.
+
+We've got your order set aside for the next 5 business days. Please give us a call as soon as you can, and one of our LEGO experts will be ready to help you update your payment method.
+
+You can find our contact number at the bottom of the page on
+https://www.lego.com/service/contact-us
+LEGO.com/service/contact-us.
+
+Speak to you soon,
+LEGO® Customer Service

@@ -4,8 +4,8 @@
 
 | | |
 |---|---|
-| **Last Updated** | 2026-06-28 |
-| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓ |
+| **Last Updated** | 2026-07-05 |
+| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓, Cowork 2026-07-05 (LEGO email parser spec + fixtures) ✓ |
 | **Next Session** | S10 (variable-earn schema + Agent 1B live test) — all blocking decisions now resolved |
 | **Phase** | P1 — Week 2 |
 | **GitHub** | theroyalcrate/ResellOS |
@@ -113,6 +113,43 @@
 ---
 
 ## Session History
+
+### Cowork 2026-07-05 — LEGO Email Parser Spec + Real Fixtures + A-007 Correction ✓ Done — 2026-07-05
+
+**Context:** Cowork session. Prep work for the email enricher agent (designed 2026-06-26, not yet built): pulled real LEGO emails from the business inbox via Gmail MCP, verified extracted data against live Supabase rows, and wrote parser fixtures + an extraction spec so the enricher build session starts from verified real-world formats.
+
+**New files:**
+- `references/lego_email_parser_spec.md` — full LEGO email family (senders/subjects for all 6 types incl. two NEW types: payment-declined and survey), per-type extractable fields, parser traps, field-fill rules restated from DECISION 017, and 5 real matching test cases for the A-007 cascade.
+- `tests/fixtures/emails/lego/` — 5 real-email fixtures: order confirmation (T508221251), shipping confirmations ship1+ship2 (T508041747 — real split shipment), payment declined (T507979974), receipt email (invoice 1355278758). Click-tracking URLs stripped; headers document gmail message ids.
+
+**Key findings (all from real emails, verified against Supabase):**
+1. **A-007 correction:** 2026 order-confirmation emails DO carry the order number in the body (`Order: T#########`) plus full line items and totals — Tier 1 matchable. CONTEXT.md cascade note corrected.
+2. **Split shipments confirmed live:** T508041747 got two same-subject "on its way" emails, different tracking + items, matching DB line items exactly (10454×5 / 31157×2; 40797 + GWP 40902 unshipped). Message-id-level dedup validated.
+3. **Per-shipment totals mislabeled "ORDER TOTAL"** in shipping emails — must map to shipments.subtotal/tax_amount, never orders totals.
+4. **+1 day date skew:** shipping email says order date 6/23; order was placed 6/22. Date matching needs ±1 day tolerance.
+5. **Unreliable price column:** order confirmation showed $0.00 unit prices for paid items; derive unit_price = line_total/qty.
+6. **Identical totals across different orders:** T508056398 and T508221251 both $169.33 — totals can never disambiguate.
+7. **2026 sender is `t.crm.lego.com`** — Agent 1B Mode 4/5 filters target `e.lego.com`; must cover both domains.
+
+**Data gap found:** orders T508133224, T508206446, T508221251 (placed ~Jun 23–25) + declined T507979974 exist in the business inbox but NOT in Supabase. These are the natural acceptance test for the enricher's first live run (should surface exactly these as pending_review stubs). Also: T507979974 payment declined 6/30 — order held 5 business days; Josh calling LEGO evening of 7/5 to pay by credit card. Root cause identified (7/5): the same gift card was assigned to two separate orders — the second order's charge failed on insufficient balance. Not a card problem. Data implications: (1) T507979974's final payment will be CC (or mixed), no GC discount on this order; (2) the double-assigned gift card was never debited for this order — its ledger balance reflects only the first order. Design note: this is the exact failure mode a balance check at order entry (card balance minus existing assignments) would prevent — candidate for Agent 02 / Purchase Planner once the enricher lands.
+
+**Files modified:** CONTEXT.md (A-007 tier 1 correction, OQ#18 LLM enrichment layer), SESSION_LOG.md (this entry).
+
+**Part 2 (same evening) — Kohl's partial-cancel repricing review mechanic designed:**
+- Problem: Kohl's reprices remaining items on partial cancel; website order details shows ORIGINAL line prices (wrong) with correct final total; only the mobile app shows adjusted per-line prices.
+- Found the "Joshua, your Kohl's order has been updated." email (Kohls@t.kohls.com) via Chrome — carries order number, cancelled items + qty + reason, remaining items, and UPDATED subtotal/tax/total. Machine-parseable. 4 real emails captured (orders 6718163821/165953/166823/167062, all 2026-06-28, all losing 72032 to stock-out; one is the pickup-variant layout).
+- Design written: `references/kohls_repricing_review_design.md` — auto-detect from email → `reconciliation_status='repricing_review'` (columns already exist) → manual per-line entry from app validated to the penny against the email's updated total → store in new `line_items.final_unit_price` (original never overwritten; migration folds into S10) → proportional-allocation fallback marked `estimated_allocation` which blocks settlement per ADR-019 → Kohl's Cash re-check in same flow.
+- Fixture: `tests/fixtures/emails/kohls/order_updated_6718166823.txt`. Parser trap: Gmail threaded 4 different orders' updates into ONE thread (same subject) — process per-message, never per-thread.
+- New open question: refund tender on partial cancel — "automatically refunded" to GC or card? Verify against the June 28 orders.
+
+**Not done (deferred):** email_enricher.py itself (build in VS Code session, using the spec + fixtures); Agent 1B live test still pending (tokens need refresh — 7-day expiry); Ollama/local-LLM idea discussed and logged as CONTEXT.md Open Question #18 (LLM enrichment layer — pluggable backend: Ollama / API / off, never load-bearing, review queue is the insertion point) — revisit at Phase 3 community launch.
+
+**Commit message:**
+```
+Cowork 2026-07-05: LEGO email parser spec + 5 real fixtures, A-007 order-confirmation correction
+```
+
+---
 
 ### Cowork 2026-06-26 — Decisions Locked + ADRs + GC Import + Email Agent Design ⏳ In Progress
 

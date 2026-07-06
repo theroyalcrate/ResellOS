@@ -1,0 +1,112 @@
+# FIXTURE: LEGO shipping confirmation, shipment 1 of 2 (real email)
+# sender: Noreply@t.crm.lego.com
+# subject: Your LEGO Order T508041747 is on its way Joshua
+# gmail_message_id: 19f1d8fe7fb21dfe  date: 2026-07-01T12:02:54Z
+
+View online
+ | My Account
+
+
+LEGO® fun is headed your way!
+
+Hi Joshua,
+
+Great news! Your LEGO® order is on its way! Your tracking number is listed below, and you can click on the link to view the progress of your shipment:
+https://www.ups.com/track?loc=en_us&tracknum=1Z0V069A0382992440
+1Z0V069A0382992440Please note that it may take up to 24 hours for you to see the tracking info.
+
+ You can also easily check the status of your order online at any time. Simply click on your name in the top right corner of
+https://lego.com
+LEGO.com to view your LEGO account and you’ll find your orders listed there. If you don’t have an account, you can still check your order’s status. Visit our Order Status page
+https://www.lego.com/page/static/orders
+here to get the info you need.
+
+ If you’d like to return or exchange an online order, please click
+https://www.lego.com/en-us/service
+here.
+
+ You can also return items purchased from
+https://lego.com
+LEGO.com in a LEGO Store as long as what you’re returning is less than $200 in total. You can make an exchange or receive a store credit, and you’ll need to show this email, so don’t forget to bring it with you.
+
+ To read more about our in-store return policy, take a look
+https://www.lego.com/page/shipping-handling
+here.
+
+If you ordered something from Pick a Brick, your items will be sent separately. Bestseller pieces should arrive within 5 business days from the date you placed your order. And standard pieces should arrive 28 business days from when you ordered them.
+
+Happy building LEGO Customer Service
+
+VISIT MY ACCOUNT
+
+Your order details
+
+Order: T508041747
+
+Order date: 6/23/2026
+
+Shipping address:
+Suite F PMB 324 23632 Hwy 99
+Edmonds
+98026
+
+SUB TOTAL:
+
+$99.95
+
+SHIPPING:
+
+$0.00
+
+ TAX:
+
+ $10.70
+
+ORDER TOTAL:
+
+$110.65
+
+Price
+
+QTD.
+
+TOTAL
+
+10454 Mickey Mouse Clubhouse & Car V39
+
+$19.99
+
+5
+
+99.95
+
+Status:
+
+Shipped
+
+CONTACT US
+
+My Account
+
+ORDER STATUS
+
+STORE FINDER
+
+
+
+
+
+If your order was paid using a credit card, debit card, Apple Pay, or gift card, we will be authorising it shortly, but no charge will be made until your order is shipped. If you used PayPal, you’ll be charged once your item(s) are available in our warehouse. If we are unable to obtain authorisation, we will contact you. Please note that your bank may hold these funds temporarily as part of the authorisation process. Stock levels may differ between the time you submit your order and the time it is processed. If any of your items are on backorder, you will be notified in a separate email.
+
+ *All orders are subject to review which may affect shipping times.
+
+This email was sent to:
+mailto:joshua.buckingham@gmail.com
+joshua.buckingham@gmail.com
+
+ We are always happy to hear what you think about our products and services. If you would like to ask a question or make a comment, please go to
+https://www.lego.com/service
+LEGO.com/service and fill in the email form that best describes your query.
+
+ LEGO Systems A/S LEGO Aastvej 1, Billund, 7190, Denmark
+ LEGO and the LEGO logo are trademarks of the LEGO Group. (c)2026 The LEGO Group.
