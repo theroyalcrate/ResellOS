@@ -16,6 +16,7 @@ from typing import Optional
 
 from db_client import get_client, PHASE_1_USER_ID
 from invoice_parser import LegoInvoice
+from order_validators import run_all_checks, print_warnings
 
 
 def _parse_lego_date(date_str: Optional[str]) -> Optional[str]:
@@ -150,6 +151,27 @@ def write_invoice(invoice: LegoInvoice) -> Optional[str]:
             f" x{item.quantity}  ${item.net_price:.2f}/unit{flag}"
         )
     print("=" * 60)
+
+    # ------------------------------------------------------------------ #
+    # Step 3.5: Data checks — catch cross-shipment duplicates and a few
+    # other issues before anything writes. Never blocks; warns and lets
+    # the person decide, same as the checks already in this codebase.
+    # ------------------------------------------------------------------ #
+    check_items = [
+        {
+            "set_number": item.set_number,
+            "is_gwp": item.is_gwp,
+            "unit_price": item.net_price,
+            "quantity": item.quantity,
+            "line_total": round(item.net_price * item.quantity, 2),
+        }
+        for item in invoice.line_items
+    ]
+    warnings = run_all_checks(
+        order_id, check_items, expected_subtotal=invoice.subtotal,
+        entry_method="invoice_parser", client=client,
+    )
+    print_warnings(warnings)
 
     if not _get_yes_no("\nWrite to database?"):
         print("Cancelled. Nothing was written.")

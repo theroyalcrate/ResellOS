@@ -10,6 +10,7 @@ Usage: python agent_02_order_entry.py
 
 from datetime import date
 from db_client import get_client, PHASE_1_USER_ID
+from order_validators import run_all_checks, print_warnings
 
 # --- Rewards constants ---
 LEGO_POINTS_PER_DOLLAR   = 6.5
@@ -34,6 +35,36 @@ _REWARD_COLS = (
     "target_offer_earned",
     "bestbuy_offer_earned",
 )
+
+# Canonical retailer values (lowercase snake_case) — matches Supabase orders/gift_cards
+# columns after the 2026-07-13 casing normalization (was Barnes/BN/Lego/LEGO mixed).
+# Aliases map common free-text input to the one stored value. Anything not listed falls
+# back to a lowercased, underscored version of whatever the user typed, with a warning.
+_RETAILER_ALIASES = {
+    "LEGO": "lego",
+    "BARNES": "barnes_noble", "BN": "barnes_noble", "B&N": "barnes_noble",
+    "BARNES AND NOBLE": "barnes_noble", "BARNES & NOBLE": "barnes_noble",
+    "BARNES_NOBLE": "barnes_noble", "BARNES NOBLE": "barnes_noble",
+    "KOHLS": "kohls", "KOHL'S": "kohls",
+    "MACYS": "macys", "MACY'S": "macys",
+    "WALMART": "walmart",
+    "TARGET": "target",
+    "BESTBUY": "best_buy", "BEST BUY": "best_buy", "BEST_BUY": "best_buy",
+}
+
+
+def normalize_retailer(raw: str) -> str:
+    """Map free-text retailer input to the canonical stored value."""
+    key = raw.strip().upper()
+    canonical = _RETAILER_ALIASES.get(key)
+    if canonical is None:
+        # Fallback for anything not in the alias table (e.g. Fred Meyer, Walgreens):
+        # pad '&' with spaces BEFORE collapsing whitespace to '_', so "B&N"-style
+        # shorthand doesn't garble into "band" instead of "b_and_n".
+        cleaned = raw.strip().lower().replace("&", " and ")
+        canonical = "_".join(cleaned.split())
+        print(f"  NOTE: '{raw}' isn't a known retailer alias — storing as '{canonical}'.")
+    return canonical
 
 
 # --------------------------------------------------------------------------- #
@@ -202,7 +233,7 @@ def collect_rewards(retailer, order_date, subtotal, discount_total,
                 )
 
     # --------------------------------------------------------------- BARNES
-    elif r == "BARNES":
+    elif r == "BARNES_NOBLE":
         print()
         print("  -- BARNES & NOBLE STAMPS --")
         stamp_multiplier = get_int(
@@ -355,7 +386,7 @@ def collect_rewards(retailer, order_date, subtotal, discount_total,
             )
 
     # ------------------------------------------------------------- BESTBUY
-    elif r == "BESTBUY":
+    elif r == "BEST_BUY":
         print()
         print("  -- BEST BUY OFFERS --")
         if get_yes_no("  Any promotional offer applied?"):
@@ -376,7 +407,7 @@ def collect_order():
     print("=" * 60)
     print()
 
-    retailer     = get_input("Retailer (e.g. LEGO, Target, BN)")
+    retailer     = normalize_retailer(get_input("Retailer (e.g. LEGO, Target, BN)"))
     order_number = get_input("Order number")
     order_date   = get_input("Order date (YYYY-MM-DD)", default=str(date.today()))
 
@@ -623,6 +654,22 @@ def write_order(order, line_items, client):
 def main():
     order, line_items, rewards_summary, client = collect_order()
     print_summary(order, line_items, rewards_summary)
+
+    # Data checks — catch GWP/price mismatches, missing set numbers, and a
+    # subtotal that doesn't match what was just entered, before saving.
+    # No order_id yet (this is a brand-new order) so the cross-shipment
+    # duplicate check is skipped here — that risk lives on the Agent 1A
+    # side, when the invoice arrives later for an order this tool already
+    # created.
+    warnings = run_all_checks(
+        order_id=None,
+        items=line_items,
+        expected_subtotal=order.get("subtotal"),
+        entry_method="manual",
+        client=client,
+    )
+    print_warnings(warnings)
+
     print()
     if get_yes_no("Save this order to the database?", default="n"):
         write_order(order, line_items, client)

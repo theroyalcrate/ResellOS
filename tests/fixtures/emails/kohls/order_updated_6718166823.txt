@@ -1,0 +1,68 @@
+# FIXTURE: Kohl's "order updated" / partial cancel email (real email, captured 2026-07-05 via Gmail web)
+# sender: Kohls@t.kohls.com
+# subject: Joshua, your Kohl's order has been updated.
+# date: 2026-06-28 18:02 (one of FOUR same-subject messages that day — Gmail threads them
+#   together; parser MUST process per-message, never per-thread)
+# note: order number is in BODY only, not subject. Recommendations section and footer trimmed.
+# LEGO set numbers are embedded in product names; SKU is Kohl's internal.
+
+Order #6718166823 has been updated.
+
+Hi Joshua:
+Unfortunately, one or more items in order #6718166823 are unavailable. These items have been removed from your order and you will be automatically refunded. We apologize for any inconvenience this may cause.
+
+MANAGE ORDER
+
+Items changed or canceled:
+
+LEGO Super Mario: Mario Kart Standard Kit Building Toy 72032 x3
+
+Color: Na Size: NO SIZE SKU: #68660706
+Recently Sold Out
+
+Remaining items:
+
+Items Shipping (6) to:
+[address block]
+Shipping Method:
+Standard Ground
+
+Estimated Arrival
+JUN 30 - JUL 03
+
+LEGO Jurassic World Little Eatie T-Rex Dinosaur Building Toy 76967 x3
+
+Color: Na Size: NO SIZE SKU: #68660708
+
+LEGO Speed Champions Mercedes-AMG G 63 & Mercedes-AMG SL 63 F1 76924 Building Kit (808 pieces) x1
+
+Color: Multi/none Size: NO SIZE SKU: #74885245
+
+LEGO Star Wars Captain Rex Y-Wing Microfighter 75391 Building Kit (99 Pieces) x2
+
+Color: Multi/none Size: NO SIZE SKU: #75138643
+
+Payment Information - Updated
+
+Billing Address:
+[address block]
+
+Your Order Summary:
+
+Subtotal: $73.36
+
+Shipping: FREE
+
+Tax: $7.71
+
+Updated Order Total: $81.07
+
+# --- Sibling messages in the same thread, same day (extraction targets only) ---
+# Order #6718165953 (PICKUP, Lynnwood): cancelled 72032 x1 ("Only 1 available");
+#   remaining 60419 x1; updated subtotal $91.98, tax $9.83, total $101.81.
+#   Pickup variant: "DIRECTIONS TO STORE" instead of "MANAGE ORDER", pickup location block
+#   instead of shipping address.
+# Order #6718167062: cancelled 72032 x1 ("Only 1 available"); remaining 76967 x3,
+#   43243 x2, 76924 x1; updated subtotal $87.93, tax $9.23, total $97.16.
+# Order #6718163821: cancelled 72032 x2 ("Only 2 available"); remaining 76967 x3,
+#   76924 x1, 75391 x2; updated subtotal $93.46, tax $9.81, total $103.27.

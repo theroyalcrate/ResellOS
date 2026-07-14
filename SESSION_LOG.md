@@ -4,8 +4,8 @@
 
 | | |
 |---|---|
-| **Last Updated** | 2026-07-05 |
-| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓, Cowork 2026-07-05 (LEGO email parser spec + fixtures) ✓, Cowork 2026-07-05 (eve — email enricher LEGO parser build) ✓ |
+| **Last Updated** | 2026-07-13 |
+| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓, Cowork 2026-07-05 (LEGO email parser spec + fixtures) ✓, Cowork 2026-07-05 (eve — email enricher LEGO parser build) ✓, Cowork 2026-07-13 (pipeline audit + retailer casing fix) ✓ |
 | **Next Session** | S10 (variable-earn schema + Agent 1B live test) — all blocking decisions now resolved |
 | **Phase** | P1 — Week 2 |
 | **GitHub** | theroyalcrate/ResellOS |
@@ -48,8 +48,9 @@
 2. Migration 014 (was 013): add `block_identifier` to `promotional_cash` (for xNNNN matching against invoice payment lines). Review whether any other columns are needed for the block model (see kohls.md Schema notes).
 3. `agent_02_order_entry.py` — replace the computed Kohl's rewards section (`_kohls_rewards()`, `_kohls_event_cash()`) with read-from-invoice prompts: capture actual earned amounts from the invoice, not derived from hardcoded constants. Capture expiration window dates for Kohl's Cash blocks and write to `promotional_cash`.
 4. Confirm `orders.kohls_rewards_earned` and `orders.kohls_event_cash_earned` columns exist and stay — but population path changes from compute to capture.
-5. Code review the agent_02 diff before commit (resell-os-code-review skill — look for any path that still derives a reward amount from a rate).
-6. Commit: "S10: Variable-earn schema — read rewards from invoice, Kohl's Cash block model, migrations 013-014"
+5. **Retailer value normalization (found 2026-07-05, deferred to S10):** live data has inconsistent retailer values — orders: `LEGO`×3 / `Lego`×3 / `BN`×1 / `Barnes`×1; gift_cards: `LEGO` / `kohls` / `target` / `Walmart` / `barnes_noble`. Case-sensitive grouping/matching sees these as different retailers. Decide canonical vocabulary (recommend anchoring to `retailer_profiles.retailer_key` machine keys from migration 011), then one-time UPDATE on orders + gift_cards, then normalize at write time in agent_02 + email_enricher. ⚠ Until then: email_enricher writes `LEGO`, which matches only 3 of the 6 LEGO orders — do the normalization BEFORE any live enricher run against orders entered as `Lego`.
+6. Code review the agent_02 diff before commit (resell-os-code-review skill — look for any path that still derives a reward amount from a rate).
+7. Commit: "S10: Variable-earn schema — read rewards from invoice, Kohl's Cash block model, migrations 013-014"
 
 **Decisions to apply in S10 (no longer CPA-gated, just need Josh's call — see Cowork 2026-06-21 entry below):**
 - Q1 (FIFO): write ADR-021 once decided (ADR-019 is now taken by Order Settlement Gate; ADR-020 is cost basis regression testing), lock `users.costing_method` docs
@@ -115,6 +116,36 @@
 ---
 
 ## Session History
+
+### Cowork 2026-07-13 — Invoice Pipeline Audit + Retailer Casing Fix ✓ Done — 2026-07-13
+
+**Context:** Cowork chat session. Josh asked what's next for S10; before starting schema work he flagged that Gmail/Drive might need organizing first. Verified live rather than assuming (per `resell-os-environment-check`).
+
+**Verified findings (Gmail + Drive MCP, now connected in Cowork — did not exist when Agent 1B was designed around local OAuth):**
+- **201 LEGO order/invoice emails** sit under the business account's `ResellOS-Invoices` label, unprocessed, still arriving live (newest same-day). None have ever moved to `ResellOS-Filed`.
+- **Drive `Invoices/` folder skeleton is empty.** All 13 retailer folders + all 12 month-folders for 2026 exist, but checked July 2026's Lego folder directly — zero files. Agent 1B has never filed a single invoice end-to-end.
+- **`invoice_files` ledger: 0 rows.** Confirms the above — despite "Built" status in this log, Mode 2 (file) has never actually run.
+- **`retailer_profiles` has only 1 row (Kohl's).** CONTEXT.md's "Retailers Currently in the System" table describes reward mechanics for 7+ retailers as built, but the table itself was never seeded beyond Kohl's — S10's plan to anchor casing normalization to `retailer_profiles.retailer_key` isn't viable as-is.
+- **Retailer casing mess confirmed current:** `orders` had Barnes(1)/BN(1)/Lego(3)/LEGO(3) across 8 rows; `gift_cards` had barnes_noble(139)/kohls(15)/LEGO(38)/target(21)/Walmart(3).
+
+**Fixed this session:**
+- One-time UPDATE on `orders` and `gift_cards`: all retailer values normalized to lowercase snake_case (`lego`, `barnes_noble`, `kohls`, `target`, `walmart`). Verified post-fix: orders now `barnes_noble`(2)/`lego`(6); gift_cards now 5 clean canonical values.
+- **`agent_02_order_entry.py`:** added `_RETAILER_ALIASES` + `normalize_retailer()`, applied at the retailer input prompt so new orders can't reintroduce the casing mess. Renamed the reward-branch comparisons `elif r == "BARNES"` → `"BARNES_NOBLE"` and `elif r == "BESTBUY"` → `"BEST_BUY"` to match the new canonical values (these would have silently stopped matching otherwise — caught in code review before commit). Unknown retailers (Fred Meyer, Walgreens, Disney Store, etc.) fall back to a lowercased/underscored version with a console note rather than erroring.
+- **`agents/email_enricher.py`:** `_build_stub_order_row` now writes `"retailer": "lego"` (was `"LEGO"`). Checked `test_email_enricher_lego.py` — no test asserts this field's casing, so no test changes needed.
+- Code review (resell-os-code-review, 4-pass) on the agent_02 diff: caught one real bug in my own first draft — the alias fallback's naive `"&" → "and"` replace would have garbled `"B&N"` into `"band"`. Fixed by padding `&` with spaces before collapsing whitespace, and added `"B&N"` as an explicit alias. No other CRITICAL/MODERATE issues found; `order_validators.py` has no retailer-string comparisons so it's unaffected.
+
+**Part 2 — personal Gmail retailer sender map (same session):** the Gmail MCP connected natively in Cowork is business-account-only, but Josh pointed out a *second* Gmail connection exists via the Zapier MCP — confirmed live against `joshua.buckingham@gmail.com` (personal) via a throwaway search. Used it to build `references/retailer_email_sources.md`: real (not guessed) senders confirmed for LEGO (already known), Barnes & Noble, Kohl's, Macy's, and Amazon Business. Target, Best Buy, and Walmart-personal senders are NOT yet confirmed — two guessed Target addresses (`orders@target.com`, `shipment-tracking@target.com`) came back with zero matches and are recorded as confirmed-wrong so nobody retries them. Also surfaced: `retailer_profiles`/CONTEXT.md's 7-retailer list is missing Fred Meyer, Walgreens, and Disney Store, all of which already have Drive invoice folders from 2026-05-19 — a documentation gap, not a code bug.
+
+**Capability gap found:** the Zapier Gmail connector can search/label/forward/archive but has no create-filter action — it can't replicate what Agent 1B Mode 5 does (a real Gmail API filter that runs with no agent involvement). Going-forward auto-routing for the new retailers needs one of: extend Mode 5's local script past LEGO, a Zap built in Zapier's own dashboard, or repeated manual session-based searches like this one. Not decided — documented as three options in the reference doc for Josh to pick from.
+
+**Not done (deferred):** confirm Target/Best Buy/Walmart-personal senders (need a real order-date search or a forwarded sample, not another guess); decide the Map 2 mechanism; decide whether to file the 201-email backlog via native Cowork MCP calls or the local Agent 1B script.
+
+**Commit message:**
+```
+Cowork 2026-07-13: invoice pipeline audit (201 unfiled emails, empty Drive, 0 invoice_files rows, retailer_profiles gap), retailer casing normalized in orders+gift_cards, normalize_retailer() added to agent_02, email_enricher retailer casing fixed, retailer_email_sources.md (B&N/Kohl's/Macy's/Amazon confirmed via personal Gmail)
+```
+
+---
 
 ### Cowork 2026-07-05 (eve) — Email Enricher: LEGO Parser Module ✓ Done — 2026-07-05
 

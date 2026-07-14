@@ -582,7 +582,7 @@ def _build_stub_order_row(parsed: ParsedLegoEmail) -> dict:
     Never fills: buy_reason, purchase_trigger, cashback_rate, gift_card_last4.
     """
     row: dict = {
-        "retailer":               "LEGO",
+        "retailer":               "lego",
         "entry_method":           "email_enricher",
         "order_status":           "pending_review",
         "cost_basis_state":       "estimated",
