@@ -33,6 +33,7 @@ Core transactions, cost basis, inventory, and sales always live in the user's ow
 - **Version control:** GitHub — repo: theroyalcrate/ResellOS
 - **Development environment:** VS Code + Claude Code extension
 - **MCP connectors connected:** Supabase ✓, GitHub ✓ (read access confirmed 2026-06-03, re-confirmed live in Cowork 2026-06-21 via `get_me`. Chat-Claude can read the repo directly — there is no project copy to paste into anymore. Writes still route through Claude Code.) Gmail ✓ and Google Drive ✓ also confirmed live in Cowork 2026-06-21 — connected to the actual ResellOS business account (`theroyalcratellc@gmail.com`), same inbox/Drive Agent 1B and Agent 1C use.
+- **Zapier MCP — separate connection path, confirmed live 2026-07-14 (chat/Cowork surface):** Enabled apps are Gmail (13 actions) and Google Drive (16 actions). Verified via a live `gmail_find_email` call that this Zapier Gmail connection points to Josh's **personal** account (`joshua.buckingham@gmail.com`) — **not** the business account (`theroyalcratellc@gmail.com`) that Agent 1B/1C use, and not the same connection as the direct Gmail/Drive MCP connectors on the line above. Treat Zapier as a separate, ad hoc chat-surface tool, not a replacement for Agent 1B/1C's direct OAuth pipeline. Capability notes: Gmail actions cover labels, drafts, send/reply/forward, archive, delete, find — **no "create filter" action exists via Zapier**, Gmail filters still require the Gmail UI directly. Google Drive actions include Create Folder and Create File From Text (plus upload/move/copy/permissions/export) — full write access, not read-only.
 - **Knowledge vault:** Obsidian + ResellOS-Knowledge private GitHub repo (theroyalcrate/ResellOS-Knowledge). PARA structure: Projects / Areas / Resources / Archive. Business logic patterns live at Areas/business-logic/. Set up 2026-06-01.
 
 ---
@@ -100,7 +101,7 @@ Five layers calculated in order:
 
 ## Retailers Currently in the System
 
-All 7 retailers have full reward profiles built in Agent 02:
+All 8 retailers below have full reward profiles built in Agent 02. Three more retailers (Fred Meyer, Walgreens, Disney Store) are known to have real order history — Drive invoice folders exist for them since 2026-05-19, and their order-confirmation email senders were confirmed 2026-07-14 — but they have no reward-mechanic profile or `retailer_profiles` row yet; that's separate future work, tracked in `references/retailer_email_sources.md`.
 
 | Retailer | Reward Mechanic | Notes |
 |----------|----------------|-------|
@@ -110,8 +111,16 @@ All 7 retailers have full reward profiles built in Agent 02:
 | Macy's | Bronze tier 1pt/$1, Bonus Day overrides, Star Money + promotional Star Money events ($10 blocks per ~$50) | Gift cards earn 0 points. rewards_reduce_taxable_base = false confirmed 2026-06-07 — Star Money is post-tax tender. |
 | Amazon | No loyalty program. Business account: tax-exempt (resale cert). Occasional delayed shipment 1% credit (Business only, opt-in). Amazon Prime Visa planned Q4 2026 (5% back). | Dual accounts: Business (preferred, tax-exempt) + Personal (fallback, taxable). Account disambiguation: multi-signal (email format, subject language, order number prefix). supports_pickup = false. |
 | Walmart Business | 2% on orders over $250 — calculated on original order value at placement, NOT final total | Pickup orders common |
-| Target | Circle debit card flag, one-off offers manual entry | Pickup supported |
-| Best Buy | Promotional offers manual entry only | Pickup supported |
+| Target | Circle debit card flag, one-off offers manual entry | Pickup supported. Order-confirmation sender confirmed 2026-07-13: `orders@oe1.target.com`. |
+| Best Buy | Promotional offers manual entry only | Pickup supported. New orders now land directly in the business inbox (no personal→business email copy step needed). |
+
+**Known but not yet onboarded (email sender confirmed 2026-07-14, no reward profile yet):**
+
+| Retailer | Order-confirmation sender | Notes |
+|----------|---------------------------|-------|
+| Fred Meyer | `email@e.fredmeyermail.com` | Drive folder exists since 2026-05-19. Sender also mixed-use like Disney Store — needs subject-line discriminator too, but exact text not yet pinned (tentatively "order placed"). Do not build filter until confirmed. |
+| Walgreens | `Walgreens@ecs.walgreens.com` | Drive folder exists since 2026-05-19. Sender may also carry pharmacy/marketing mail — not yet filtered out. |
+| Disney Store | `guest.services@disneystore.com` | Drive folder exists since 2026-05-19. Sender also carries marketing mail (confirmed) — filter must combine sender + subject contains "Thank you for your order", not sender alone. |
 
 **Cashback platforms (Agent 07):** Rakuten, RetailMeNot, Capital One Shopping, Microsoft Shopping, Honey, TopCashback + Other write-in.
 

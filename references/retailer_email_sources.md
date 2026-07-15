@@ -46,6 +46,8 @@ Recommend (a) once senders are fully confirmed — it's what LEGO already uses a
 - `order-update@amazon.com` / `no-reply@amazon.com` — delivery estimate updates.
 - `qla@amazon.com` — cancellation notice.
 - All samples pulled showed order-number prefix `112-`, consistent with amazon.md's existing finding that `112-` = Business account. **Personal account (`114-` prefix) senders not separately confirmed this pass** — Amazon likely uses the same sender addresses for both accounts and the order-number prefix is the only differentiator, but that needs one real Personal-account email to confirm rather than assume.
+- **Correction (2026-07-14, Josh):** the Amazon Personal account's order confirmations flow to a *different* personal email address entirely — not `joshua.buckingham@gmail.com`, the account Zapier/Cowork is connected to. This isn't a sender-confirmation gap like the others; it's an access gap. No filter can be built for Amazon Personal through the current tooling (Zapier or any connected MCP) because Claude has no connection to that other inbox at all. **This one has to be a manual filter Josh sets up himself**, not something Claude can build via Chrome extension or otherwise in a future session unless that other account gets connected too.
+- **Mitigating factor:** Amazon's own order history/invoices are easy to look up directly in the account (both Business and Personal), so Amazon Personal is lower-priority to solve than retailers where the invoice is otherwise hard to reconstruct — a manual periodic check-in against the Amazon Personal order history page is a reasonable stopgap even with no filter at all.
 
 ### Target — CONFIRMED (2026-07-13, Josh's own inspection)
 - **`orders@oe1.target.com` — order confirmation, good readable data** (price/line-item detail usable for ResellOS entry, per Josh's direct check). Corrects the earlier guess in this doc, which had this address down as "login codes" from a thin sample — it's actually the real transactional sender.
@@ -65,8 +67,22 @@ Recommend (a) once senders are fully confirmed — it's what LEGO already uses a
 - **Conclusion: Walmart personal orders need the Chrome-extension / authenticated-browser-capture path, not an email parser.** This matches the architecture decision already on record (CONTEXT.md — "Authenticated account scraping vs. enrichment scraping": the browser extension is the long-term design for point-of-purchase capture; LEGO's order-history scrape via Claude in Chrome is the existing precedent for this pattern). Do not build a Walmart email_enricher parser module — route this retailer through that work instead when it's built.
 - `help@walmart.com` "Picked up at 10:59am: LEGO Super Mario Piran..." confirms LEGO sets do get bought via Walmart pickup — still worth adding as a distinct retailer/channel note if not already tracked elsewhere.
 
-### Fred Meyer, Walgreens, Disney Store — NOT SEARCHED YET
-These three have Drive folders already (created 2026-05-19) but aren't in CONTEXT.md's "Retailers Currently in the System" table at all — meaning orders exist for these outside the documented 7-retailer set. Not searched this session; flagging their existence as a documentation gap for CONTEXT.md, separate from this email-sourcing task.
+### Amazon — sender re-confirmed (2026-07-14)
+- `auto-confirm@amazon.com` re-confirmed by Josh directly — matches what was already recorded 2026-07-13 above. No change, just an independent confirmation.
+
+### Fred Meyer — CONFIRMED sender, subject discriminator NOT YET CONFIRMED (2026-07-14, Josh's own inspection)
+- `email@e.fredmeyermail.com` — order confirmation sender, but **also mixed-use like Disney Store** (marketing/other mail too, confirmed by Josh) — sender alone is not a safe filter condition here either.
+- **Subject-line discriminator — tentative only:** Josh's read is something like "order placed," but not confirmed precisely enough to build a filter on yet. **Do not build the Fred Meyer Map 2 filter until the exact subject text is pinned** (open a real Fred Meyer order-confirmation email and copy the literal subject line) — same trap as assuming sender-only would have been for Disney Store.
+
+### Walgreens — CONFIRMED (2026-07-14, Josh's own inspection)
+- `Walgreens@ecs.walgreens.com` — order confirmation sender.
+- Not yet checked: shipping/pickup-ready notice sender, or whether this address also carries pharmacy/marketing mail that would need excluding from a filter.
+
+### Disney Store — CONFIRMED (2026-07-14, Josh's own inspection)
+- `guest.services@disneystore.com` — order confirmation sender, but **also carries marketing/other mail** (confirmed by Josh, not just suspected). Sender alone is not a safe filter condition.
+- **Subject-line discriminator confirmed: `Thank you for your order`.** Any Map 2 filter for Disney Store must combine both conditions — `from:(guest.services@disneystore.com) subject:("Thank you for your order")` — not sender alone, or marketing mail will get pulled into the business inbox too.
+
+**Still open for all three:** none of them are in CONTEXT.md's "Retailers Currently in the System" table yet, and none have a reward-mechanic profile (no `retailer_profiles` row, no Agent 02 reward logic). Sender confirmation resolves Map 1/Map 2 email routing only — it doesn't mean these retailers are fully onboarded the way LEGO/Kohl's/etc. are. CONTEXT.md updated 2026-07-14 to at least list them as known retailers with orders; reward-mechanic build-out is separate future work.
 
 ---
 
@@ -84,4 +100,6 @@ This directly resolves/updates CONTEXT.md Open Question #2 ("Google Drive migrat
 
 ## Suggested Next Step
 
-Walmart personal is resolved (Chrome-extension path, not email_enricher); Target is resolved (email parser is viable, `orders@oe1.target.com` confirmed); Best Buy is deferred (no rush — new orders already land in the business inbox natively, historical invoices are handled outside this pipeline). Decide the Map 2 mechanism (native filter vs. Zap vs. manual) for the retailers that need a personal→business copy step: LEGO, Barnes & Noble, Kohl's, Macy's, Amazon Business. Best Buy needs no Map 2 at all once confirmed. Update this doc in place as each retailer's status changes — don't create a second copy.
+Walmart personal is resolved (Chrome-extension path, not email_enricher); Target is resolved (email parser is viable, `orders@oe1.target.com` confirmed); Best Buy is deferred (no rush — new orders already land in the business inbox natively, historical invoices are handled outside this pipeline). Fred Meyer, Walgreens, and Disney Store senders are now confirmed (2026-07-14) but still need CONTEXT.md retailer-table entries and reward-mechanic profiles before they're "onboarded" the way the others are.
+
+**Full current Map 2 filter list (senders confirmed, ready to build once the mechanism is chosen):** LEGO (`Noreply@t.crm.lego.com` + legacy `e.lego.com`), Barnes & Noble, Kohl's, Macy's, Amazon Business, Target, Fred Meyer, Walgreens, Disney Store — 9 retailers, ~10 filters counting LEGO's two domains. Best Buy and Walmart personal need no Map 2 filter (resolved above). **Amazon Personal is out of scope for any Claude-built filter** — different personal inbox Claude has no access to; Josh has to set that one up by hand, or it stays manual via Amazon's own order history page. Decide the Map 2 mechanism (native filter vs. Zap vs. manual) once, then apply it across the 9 in-scope retailers. Update this doc in place as each retailer's status changes — don't create a second copy.

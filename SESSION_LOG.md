@@ -4,8 +4,8 @@
 
 | | |
 |---|---|
-| **Last Updated** | 2026-07-13 |
-| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓, Cowork 2026-07-05 (LEGO email parser spec + fixtures) ✓, Cowork 2026-07-05 (eve — email enricher LEGO parser build) ✓, Cowork 2026-07-13 (pipeline audit + retailer casing fix) ✓ |
+| **Last Updated** | 2026-07-14 |
+| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓, Cowork 2026-07-05 (LEGO email parser spec + fixtures) ✓, Cowork 2026-07-05 (eve — email enricher LEGO parser build) ✓, Cowork 2026-07-13 (pipeline audit + retailer casing fix) ✓, Cowork 2026-07-14 (Zapier connector verification) ✓ |
 | **Next Session** | S10 (variable-earn schema + Agent 1B live test) — all blocking decisions now resolved |
 | **Phase** | P1 — Week 2 |
 | **GitHub** | theroyalcrate/ResellOS |
@@ -117,6 +117,22 @@
 
 ## Session History
 
+### Cowork 2026-07-14 — Zapier Connector Verification (Gmail + Drive) ✓ Done — 2026-07-14
+
+**Context:** Chat session. Josh asked what Zapier's Gmail/Drive connector could do (create filters vs. read/write). Initial answer treated Zapier as unauthenticated based on stale tool-availability info in the session's system context — wrong. Josh caught it and asked for a live check plus a doc update.
+
+**Verified live (`list_enabled_zapier_actions` + one throwaway `gmail_find_email` read):**
+- Zapier MCP is connected with two apps enabled: **Gmail** (13 actions) and **Google Drive** (16 actions).
+- Live read confirms the Zapier Gmail connection points to Josh's **personal** account (`joshua.buckingham@gmail.com`) — same account first identified in the 2026-07-13 session, re-confirmed today. This is a distinct connection from the direct Gmail/Drive MCP connectors (business account, `theroyalcratellc@gmail.com`) that Agent 1B/1C use — don't conflate the two.
+- **Gmail via Zapier:** label, add/remove label, reply, create draft/draft reply, send, delete, archive, forward, find email, get attachment by filename. **No create-filter action** — matches the 2026-07-13 finding; real Gmail filters still require the Gmail UI directly, not scriptable via Zapier.
+- **Google Drive via Zapier — not previously logged:** full write access, not read-only. Actions include Create Folder, Create File From Text, Upload File, Move File, Copy File, Replace File, Update File/Folder Name & Metadata, Add/Remove File Sharing Permission, Export File, plus Find a Folder/File and Retrieve by ID for reads.
+
+**Documentation updated:** CONTEXT.md "MCP connectors connected" section — added a dedicated Zapier bullet distinguishing it from the direct connectors, with the account-ownership and capability notes above.
+
+**Not done:** no decision on whether/when to actually route any pipeline work through the Zapier path. Composio was rejected 2026-07-01 for putting paid middleware in the core invoice pipeline (own-your-data principle); Zapier is the same category of concern and hasn't been evaluated against that principle yet. Treat as available for ad hoc chat-surface tasks only until a decision is made.
+
+---
+
 ### Cowork 2026-07-13 — Invoice Pipeline Audit + Retailer Casing Fix ✓ Done — 2026-07-13
 
 **Context:** Cowork chat session. Josh asked what's next for S10; before starting schema work he flagged that Gmail/Drive might need organizing first. Verified live rather than assuming (per `resell-os-environment-check`).
@@ -140,10 +156,20 @@
 
 **Not done (deferred):** confirm Target/Best Buy/Walmart-personal senders (need a real order-date search or a forwarded sample, not another guess); decide the Map 2 mechanism; decide whether to file the 201-email backlog via native Cowork MCP calls or the local Agent 1B script.
 
+**Correction (2026-07-14 — this paragraph is stale, `references/retailer_email_sources.md` is current):** later the same day/evening, Josh did his own inspection and resolved all three "not yet confirmed" items above — the doc was updated in place but this log entry never was, so it kept saying "not yet confirmed" after it no longer was true. Corrected status, per the reference doc:
+- **Target — CONFIRMED:** `orders@oe1.target.com` is the real order-confirmation sender (good line-item detail). The doc's own guessed `orders@oe1.target.com`-adjacent entries were wrong in a different way than recorded here — see the reference doc directly rather than this summary.
+- **Walmart (personal) — RESOLVED, but not via email:** Josh confirmed Walmart order emails don't carry usable price/line-item detail regardless of sender. Ruled out as an email-parser retailer entirely; routes through the future Chrome-extension capture path instead, same as the existing LEGO order-history scrape precedent. No Map 2 filter needed here.
+- **Best Buy — DEFERRED, not a sender problem:** the account was originally set up under a now-dead email domain, so historical confirmations aren't retrievable by sender search at all (Josh has been downloading invoices manually from bestbuy.com instead). Going forward, Best Buy order confirmations already land directly in the **business** inbox — so Best Buy needs **no** personal→business Map 2 step, unlike every other retailer here.
+- Net effect (updated again same evening, 2026-07-14): 6 of the 7 documented retailers have confirmed Map 2 filter requirements (LEGO ×2 domains, Barnes & Noble, Kohl's, Macy's, Amazon Business, Target). Josh then also confirmed senders for the three previously-unsearched retailers not in CONTEXT.md's table at all: **Fred Meyer** (`email@e.fredmeyermail.com`), **Walgreens** (`Walgreens@ecs.walgreens.com`), **Disney Store** (`guest.services@disneystore.com`) — all added to `references/retailer_email_sources.md` and to a new "known but not onboarded" table in CONTEXT.md. Full current Map 2 scope: 9 retailers, ~10 filters (LEGO's two domains). Best Buy and Walmart-personal remain the only two needing no Map 2 filter (resolved above). These three new retailers still have no `retailer_profiles` row or reward-mechanic logic in Agent 02 — sender confirmation only resolves email routing, not full onboarding.
+- **Amazon Personal — different problem, not a sender gap:** Josh confirmed Amazon Personal order confirmations land in a *different personal email inbox* than the one Claude/Zapier is connected to (`joshua.buckingham@gmail.com`). No Claude-built filter is possible there without connecting that other inbox — Josh will set that filter up manually. Mitigating factor: Amazon's order history/invoices are easy to pull directly from the account regardless, so this is low-priority to chase further. Amazon Business is unaffected and stays in the 9-retailer Map 2 scope above.
+- **Lesson:** a session-summary paragraph in this log is not the same document as the reference file it points to, and can go stale the moment the reference file gets a same-day follow-up edit. When answering questions about retailer sender status, read `references/retailer_email_sources.md` directly — don't rely on this log's prose summary of it.
+
 **Commit message:**
 ```
 Cowork 2026-07-13: invoice pipeline audit (201 unfiled emails, empty Drive, 0 invoice_files rows, retailer_profiles gap), retailer casing normalized in orders+gift_cards, normalize_retailer() added to agent_02, email_enricher retailer casing fixed, retailer_email_sources.md (B&N/Kohl's/Macy's/Amazon confirmed via personal Gmail)
 ```
+
+**Verification outcome (Claude Code, 2026-07-14 — read this before trusting any future "✓ Complete, committed + pushed" note in this log):** asked Claude Code to review and push just today's 5 files before this went out. `git status` found **18** changed/untracked items, not 5 — three weeks of work from the Cowork 2026-06-21 (2) session (`order_validators.py` wiring into `agent_02`'s `main()`, matching `db_writer.py` wiring, ADR-019, ADR-020, `cost_basis_checks.py`, `cost_basis_status_report.py`) plus several new/rewritten skills, a Kohl's repricing design doc, and LEGO backlog files had been sitting locally uncommitted the entire time, despite this log recording that session as "✓ Complete" with its own commit message. **If Claude Code had committed only the 5 files this session's prompt described, `agent_02_order_entry.py` would have shipped importing `order_validators.py` — a module not in that narrower commit — breaking `main` with an ImportError on a fresh checkout.** Caught before push, not after. Josh chose to commit everything together in one combined commit (with an expanded message) rather than split it. 122 tests passed, compile checks and code review clean. Push landed: `a4b66ca..9d2da13 main -> main`, also carrying two previously-unpushed 2026-07-05 commits. Repo is now fully caught up as of this push — but the takeaway stands: **"✓ Complete" in this log has meant "the work was done," not reliably "it's committed and pushed."** Verify with `git status`/`git log` before assuming a past session's log entry reflects what's actually on `main`.
 
 ---
 
