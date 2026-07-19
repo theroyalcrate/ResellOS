@@ -4,9 +4,9 @@
 
 | | |
 |---|---|
-| **Last Updated** | 2026-07-18 |
-| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓, Cowork 2026-07-05 (LEGO email parser spec + fixtures) ✓, Cowork 2026-07-05 (eve — email enricher LEGO parser build) ✓, Cowork 2026-07-13 (pipeline audit + retailer casing fix) ✓, Cowork 2026-07-14 (Zapier connector verification) ✓, Cowork 2026-07-18 (eve — OAuth publish fix, invoice_files schema drift fix, first successful Agent 1B live filing) ✓, Cowork 2026-07-18 (late — manual-entry-first architecture decision + Agent 09 Purchase Planner built) ✓ |
-| **Next Session** | S10 (variable-earn schema) — Agent 1B is now live-tested and working. Highest-leverage next step is Tier 2 PDF-content matching before bulk-filing the 201-email backlog (see Open Questions). Agent 09 Purchase Planner is built and ready to use for the next planned buying session, but untested against a real one yet. |
+| **Last Updated** | 2026-07-19 |
+| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓, Cowork 2026-07-05 (LEGO email parser spec + fixtures) ✓, Cowork 2026-07-05 (eve — email enricher LEGO parser build) ✓, Cowork 2026-07-13 (pipeline audit + retailer casing fix) ✓, Cowork 2026-07-14 (Zapier connector verification) ✓, Cowork 2026-07-18 (eve — OAuth publish fix, invoice_files schema drift fix, first successful Agent 1B live filing) ✓, Cowork 2026-07-18 (late — manual-entry-first architecture decision + Agent 09 Purchase Planner built) ✓, Cowork 2026-07-19 (Agent 10 Buy-Side Stock Watch — framework built, Walmart proven live, 19 targets seeded from Brick Domain tier list) ✓ |
+| **Next Session** | S10 (variable-earn schema) — Agent 1B is now live-tested and working. Highest-leverage next step is Tier 2 PDF-content matching before bulk-filing the 201-email backlog (see Open Questions). Agent 09 Purchase Planner is built and ready to use for the next planned buying session, but untested against a real one yet. Agent 10 Stock Watch needs `APIFY_API_TOKEN` + `FIRECRAWL_API_KEY` added to `.env` before it can run standalone, plus real verification for target/kohls/macys/jcpenney/christianbook/amazon checkers (only walmart is proven — see agent_10_stock_watch.py docstring). |
 | **Phase** | P1 — Week 2 |
 | **GitHub** | theroyalcrate/ResellOS |
 
@@ -33,7 +33,7 @@ Three options already documented in `references/retailer_email_sources.md`: (a) 
 
 ### Step 5 — Bulk-file the remaining ~200-email backlog — hold until Step 1 (Tier 2 matching) exists, otherwise every file lands UNMATCHED in `_unmatched/` folders with no order linkage.
 
-**Note on Migration 012 numbering:** The local file is `012_invoice_files_ledger.sql` but S10 had planned to use 012 for `account_type` on `retailer_profiles`. The invoice_files migration was applied in Supabase 2026-06-10 and takes 012. The `account_type` migration is now 013, and `block_identifier` is 014. **015 is now taken too** — `migrations/015_purchase_plans.sql` (Agent 09 Purchase Planner schema: `purchase_plans` + `purchase_plan_items`), applied live via Supabase MCP 2026-07-18 under the MCP migration name `014_purchase_plans` before the local file was renumbered — same tolerated name/number mismatch pattern as migration 012. Next open slot is **016**.
+**Note on Migration 012 numbering:** The local file is `012_invoice_files_ledger.sql` but S10 had planned to use 012 for `account_type` on `retailer_profiles`. The invoice_files migration was applied in Supabase 2026-06-10 and takes 012. The `account_type` migration is now 013, and `block_identifier` is 014. **015 is taken** — `migrations/015_purchase_plans.sql` (Agent 09 Purchase Planner schema), applied live via Supabase MCP 2026-07-18 under the MCP migration name `014_purchase_plans` before the local file was renumbered — same tolerated name/number mismatch pattern as migration 012. **016 is now taken too** — `migrations/016_stock_watch.sql` (Agent 10 Buy-Side Stock Watch schema: `stock_watch_targets` + `stock_watch_checks`), applied live via Supabase MCP 2026-07-19, name matches this time (no renumbering needed). Next open slot is **017**.
 
 ---
 
@@ -102,8 +102,9 @@ Three options already documented in `references/retailer_email_sources.md`: (a) 
 
 **Supabase PostgreSQL — Live**
 
-- **25** tables live (invoice_files added — migration 012 applied 2026-06-10; purchase_plans + purchase_plan_items added — migration 015 applied 2026-07-18)
-- Migrations applied through **012**, plus an unlogged fix **012b_invoice_files_user_id_fix** applied directly via Supabase MCP 2026-07-18 (added missing `user_id uuid NOT NULL` column + corrected RLS policy on `invoice_files` — the live table had drifted from what migration 011/012 documents since 2026-06-10). **Local `migrations/` folder does not yet have a matching .sql file for this — add one next Claude Code session.** Migration **015** (`purchase_plans` schema) applied live via Supabase MCP 2026-07-18, local file present and matches live schema.
+- **27** tables live (invoice_files added — migration 012 applied 2026-06-10; purchase_plans + purchase_plan_items added — migration 015 applied 2026-07-18; stock_watch_targets + stock_watch_checks added — migration 016 applied 2026-07-19)
+- Migrations applied through **012**, plus an unlogged fix **012b_invoice_files_user_id_fix** applied directly via Supabase MCP 2026-07-18 (added missing `user_id uuid NOT NULL` column + corrected RLS policy on `invoice_files` — the live table had drifted from what migration 011/012 documents since 2026-06-10). **Local `migrations/` folder does not yet have a matching .sql file for this — add one next Claude Code session.** Migrations **015** (`purchase_plans`) and **016** (`stock_watch_targets`/`stock_watch_checks`) applied live via Supabase MCP 2026-07-18/19, local files present and match live schema.
+- **19** rows in `stock_watch_targets` — High-tier sets from the July 2026 Brick Domain tier list (uploaded by Josh 2026-07-19), seeded directly via SQL. High-mid tier (63 more sets) intentionally not seeded yet — see cost note in the 2026-07-19 session entry below before expanding.
 - **9** orders in DB (T487170400, T507760965, T507761629, T507771505, T507787478, T508041747, T508056398, T508059246, T469280178)
 - **1** row in `invoice_files` (was 0) — first successful Agent 1B filing, `order_id null` (unmatched — see Open Questions, Tier 2 matching gap)
 - **211** gift cards in gift_cards table: 36 LEGO (giftcards.com, $250/$225/10%, Jun 14–21 2026) + 175 non-LEGO (B&N 139, Kohl's 15, Target 21 — imported 2026-06-28 from lgc_2026.xlsx; 44 active cards, $3,631.69 available balance)
@@ -116,6 +117,40 @@ Three options already documented in `references/retailer_email_sources.md`: (a) 
 ---
 
 ## Session History
+
+### Cowork 2026-07-19 — Agent 10 Buy-Side Stock & Discount Watch (framework built, Walmart proven) ✓ Done — 2026-07-19
+
+**Context:** Continuation of the 2026-07-18 late-night session, same evening's scraping exploration extended into a real build. Josh added Firecrawl and Apify MCP connectors and asked to test Walmart pricing on 3 sets first, which led to scoping a sell-side price-watch tool (paused — Josh wants to think it through more) and a buy-side stock/discount alert tool (built tonight).
+
+**Scope decided before building:** LEGO.com seconds-level restock alerts are explicitly OUT of scope — Josh already pays for a dedicated service, and general-purpose scraping actors (Apify/Firecrawl) aren't built for sub-minute polling economically (per-run browser/proxy overhead vs. a dedicated service's shared infrastructure). Buy-side tool targets the 7 retailers where daily cadence is acceptable: Macy's, Target, Kohl's, Walmart, JCPenney, Christianbook, Amazon.
+
+**Retiring-sets list located:** Josh referenced an "already uploaded" retiring sets list that wasn't findable in this session's uploads, the ResellOS repo, or connected project knowledge — flagged honestly rather than guessed at. Josh then uploaded the real files mid-session: `2.0 2026 Brick Domain Tier List (July).xlsx` (124 rows, current month's snapshot) and `2026 Brick Domain Tier List (1.5).xlsx` (307 rows, broader/older May snapshot spanning all retirement months). Brick Domain is already flagged as a reliable retirement-prediction source in prior project memory (vs. Brickeconomy, flagged unreliable). Used the July file as current; parsed `"SETNUM Name"` format into set_number/set_name cleanly for all 124 rows.
+
+**Schema — `migrations/016_stock_watch.sql`:** `stock_watch_targets` (one row per SET, not per set+retailer — which retailers carry a given set isn't known ahead of time, so a check fans out across retailers and discovers carriers naturally) + `stock_watch_checks` (one row per check: retailer, found/in_stock/price, alert_triggered/alert_reason). Both RLS-enabled, applied live via Supabase MCP, confirmed via `list_tables`. Seeded 19 High-tier sets from the July list (High-mid's 63 more sets deliberately not seeded yet — see cost note below).
+
+**Live verification — mixed results, documented honestly rather than papered over:**
+- **Walmart: PROVEN.** Apify's `e-commerce/walmart-product-detail-scraper` actor confirmed live 3 times tonight (42167 Mack LR Garbage Truck $37.94, 10327 Dune Ornithopter $199.99, 10305 Lion Knights' Castle $569.99) — clean `priceInfo.price`/`availability`/`sellerName` fields, all three sold by third-party marketplace sellers (not Walmart direct), consistent with Josh's own read on these listings.
+- **Kohl's: PARTIAL.** `lexis-solutions/kohls-scraper` correctly resolved a search query to the exact right product page, but price/availability fields came back null. Actor's own advertised success rate is 64.3% — treat with suspicion.
+- **Target, Macy's: UNVERIFIED.** Both Apify actors (`bovi/target-products`, `lexis-solutions/macys-scraper`) returned 0 dataset items on search-query input. Working theory (untested): these need a direct product URL like Walmart did, not a search string — Walmart's success came from finding the URL via Firecrawl search first, then feeding that URL to the actor.
+- **JCPenney: FAILED outright.** `stealth_mode/jcpenney-product-search-scraper` exited with code 1.
+- **Amazon: DIFFICULT.** `junglee/Amazon-crawler` failed twice — once on a search URL, once on a real, verified direct product URL (found via Firecrawl search) — both `"no_results_found"`. A Firecrawl scrape of the same URL loaded the real page (title matched exactly) but returned no usable JSON. Looks like bot-detection friction rather than a bad URL or query. Flagged as needing a paid/stealth approach, not pursued further tonight — one retailer among seven, not the priority.
+- **Christianbook: UNVERIFIED, no Apify actor exists at all** (searched, confirmed zero results — small enough niche nobody's built one). Firecrawl search for one test set found nothing, but this may just mean Christianbook doesn't carry that particular set, not a tool failure — no real signal either way yet.
+
+**Built — `agents/agent_10_stock_watch.py`:** Standalone script (not Cowork-orchestrated) calling Apify and Firecrawl REST APIs directly, matching the existing agent pattern (portable to Mac mini/cron, not tied to a Claude session). Pure logic: `determine_alert()` (restock: out-of-stock → in-stock transition; discount: price ≥ threshold % below msrp, default 20% — both can fire together), `parse_tier_list_row()`, defensive field coercion helpers (`_coerce_price`, `_coerce_in_stock`) since different retailers represent price/availability completely differently. `RETAILER_CHECKERS` only has `walmart` wired in — the others are documented as next steps, not shipped with guessed field mappings, since wrong data in an alert tool is worse than no data (same principle CONTEXT.md applies to cost basis). `import_tier_list_xlsx()` for future monthly Brick Domain re-imports. **Needs `APIFY_API_TOKEN` and `FIRECRAWL_API_KEY` added to `.env` before it can run standalone** — tonight's live verification went through Cowork's already-authenticated MCP connectors, a different auth path.
+
+**Tests — `tests/test_agent_10_stock_watch.py`:** 23 tests, all passing, no network/DB — alert logic (all transition combinations, threshold edge cases, both-reasons-at-once), tier-list row parsing, price/stock coercion across varied input shapes. Full suite: 161/161 passing (138 prior + 23 new).
+
+**Cost flagged, not yet decided:** 19 High-tier sets × up to 6 Apify-covered retailers = up to 114 checks/day once all checkers are wired; the full 82 High+High-mid sets would be ~492/day. Rough per-check costs seen tonight ran $0.003–$0.01 depending on retailer. Deliberately seeded High tier only (19 sets) as the conservative default — expanding to High-mid is Josh's call once real per-check costs are confirmed across all wired retailers, not a default to expand into automatically.
+
+**Sell-side price watch — scope refined, not built:** Josh clarified this is about competitor stock-at-MSRP suppressing appreciation (example: 76178 Daily Bugle had "zombie stock" at Amazon most of the year, went OOS this week), not simple threshold alerts. Retailers: Amazon, Walmart, Barnes & Noble, Hobby Town, Macy's (different list than buy-side's 7). Business context: shipping most of last year's purchased inventory to WFS starting mid-August 2026, goal fully in WFS by beginning of October for Q4, watching for ROI-preserving pricing. Full detail in `project_sell_side_price_watch_tool.md` memory — Josh explicitly wants to think this through more before building.
+
+**Not done (deferred):**
+- 6 of 7 retailer checkers not wired into `RETAILER_CHECKERS` — need real field-mapping verification, most promisingly by trying direct product URLs (Walmart's fix) instead of search queries.
+- `.env` still missing `APIFY_API_TOKEN` and `FIRECRAWL_API_KEY` — script can't run standalone yet.
+- No scheduled task wired up yet (daily cadence agreed, but not worth scheduling with only 1 of 7 retailers actually working).
+- Sell-side tool not started — Josh wants to think it through more.
+
+---
 
 ### Cowork 2026-07-18 (eve) — OAuth Fix + Schema Drift Fix + First Successful Agent 1B Filing ✓ Done — 2026-07-18
 
