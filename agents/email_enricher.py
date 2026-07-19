@@ -139,9 +139,8 @@ class WritePlan:
 # Action constants
 ACT_ENRICH_ORDER    = "enrich_order"      # update existing order from email data
 ACT_CREATE_SHIPMENT = "create_shipment"   # add shipment + tracking to existing order
-ACT_CREATE_STUB     = "create_stub"       # create pending_review order from email
+ACT_FLAG_UNMATCHED  = "flag_unmatched"    # no matching order — review queue only, never auto-create
 ACT_FLAG_DECLINED   = "flag_declined"     # flag existing order for payment declined
-ACT_STUB_DECLINED   = "stub_declined"     # create stub with payment_declined note
 ACT_RECEIPT_PDF     = "receipt_needs_pdf" # receipt envelope — forward to Agent 1A
 ACT_SKIP            = "skip"              # survey, dedup, or unhandled
 
@@ -445,11 +444,20 @@ def plan_enrichment(
 
     Cascade:
       Tier 1 — order number → deterministic → enrich existing order or create shipment.
-      No Tier 1 match → create pending_review stub (never silently drop).
+      No Tier 1 match → flag_unmatched (review queue only, never auto-create an order).
+
+    Manual-entry-first architecture (revised 2026-07-18): Josh enters every order
+    himself via agent_02 — set numbers, gift card linkage, and reward detail are
+    unreliable or absent from the emails themselves. This agent is a verification
+    and tracking layer, not an order source. An unmatched email means either the
+    order hasn't been entered yet (go enter it) or a real data mismatch — never a
+    reason to auto-create a row.
 
     Rules:
       - Totals are NEVER a matching criterion. Two different orders can share
         identical totals ($169.33 confirmed on T508056398 and T508221251).
+      - No match → flag_unmatched; no DB write of any kind. Surfaced in the review
+        queue for Josh to reconcile manually.
       - Payment declined → flag for review; never auto-cancel.
       - Receipt envelopes have no order number → forward to Agent 1A.
       - Surveys → skip.
@@ -475,10 +483,10 @@ def plan_enrichment(
                 notes="enrich order metadata from confirmation email",
             )
         return WritePlan(
-            action=ACT_CREATE_STUB,
+            action=ACT_FLAG_UNMATCHED,
             gmail_message_id=msg_id,
             parsed=parsed,
-            notes=f"no existing order for {parsed.order_number} — create pending_review stub",
+            notes=f"no existing order for {parsed.order_number} — flagged for manual entry, no order created",
         )
 
     if isinstance(parsed, LegoParsedShippingConfirmation):
@@ -492,10 +500,10 @@ def plan_enrichment(
                 notes=f"create shipment with tracking {parsed.tracking_number}",
             )
         return WritePlan(
-            action=ACT_CREATE_STUB,
+            action=ACT_FLAG_UNMATCHED,
             gmail_message_id=msg_id,
             parsed=parsed,
-            notes=f"no existing order for {parsed.order_number} — create stub + shipment",
+            notes=f"no existing order for {parsed.order_number} — flagged for manual entry, no order created",
         )
 
     if isinstance(parsed, LegoParsedPaymentDeclined):
@@ -509,10 +517,10 @@ def plan_enrichment(
                 notes="flag order pending_review — payment declined; never auto-cancel",
             )
         return WritePlan(
-            action=ACT_STUB_DECLINED,
+            action=ACT_FLAG_UNMATCHED,
             gmail_message_id=msg_id,
             parsed=parsed,
-            notes=f"no existing order for {parsed.order_number} — orphan stub with payment_declined flag",
+            notes=f"no existing order for {parsed.order_number} — payment_declined, flagged for manual entry, no order created",
         )
 
     return WritePlan(action=ACT_SKIP, gmail_message_id=msg_id, parsed=parsed,
@@ -575,37 +583,6 @@ def show_review_queue(plans: list) -> None:
 # Write path — Supabase I/O, GATED
 # Never call execute_write_plan without showing the review queue first.
 # ---------------------------------------------------------------------------
-
-def _build_stub_order_row(parsed: ParsedLegoEmail) -> dict:
-    """
-    Build an orders table row for a stub (pending_review) order.
-    Never fills: buy_reason, purchase_trigger, cashback_rate, gift_card_last4.
-    """
-    row: dict = {
-        "retailer":               "lego",
-        "entry_method":           "email_enricher",
-        "order_status":           "pending_review",
-        "cost_basis_state":       "estimated",
-        "reconciliation_status":  "pending",
-        "invoice_expected":       True,
-    }
-    if hasattr(parsed, "order_number"):
-        row["order_number"] = parsed.order_number
-    if hasattr(parsed, "order_date") and parsed.order_date:
-        row["order_date"] = parsed.order_date.isoformat()
-
-    if isinstance(parsed, LegoParsedOrderConfirmation):
-        if parsed.subtotal    is not None: row["subtotal"]        = parsed.subtotal
-        if parsed.tax         is not None: row["tax_paid"]        = parsed.tax
-        if parsed.shipping    is not None: row["shipping"]        = parsed.shipping
-        if parsed.order_total is not None:
-            row["total"]          = parsed.order_total
-            row["expected_total"] = parsed.order_total
-        if parsed.line_items:
-            row["expected_item_count"] = sum(i.qty for i in parsed.line_items)
-
-    return row
-
 
 def _build_shipment_row(
     order_id: str, user_id: str, parsed: LegoParsedShippingConfirmation
@@ -707,62 +684,15 @@ def execute_write_plan(plan: WritePlan, client, user_id: str) -> bool:
         print(f"  OK: shipment created — tracking {p.tracking_number}")
         return True
 
-    if plan.action in (ACT_CREATE_STUB, ACT_STUB_DECLINED):
-        order_number = getattr(p, "order_number", "")
-        if order_number:
-            existing = (
-                client.table("orders")
-                .select("order_id")
-                .eq("user_id", user_id)
-                .eq("order_number", order_number)
-                .execute()
-            )
-            if existing.data:
-                print(f"  SKIP DEDUP: stub for {order_number} already exists")
-                return True
-
-        stub = _build_stub_order_row(p)
-        stub["user_id"] = user_id
-        if plan.action == ACT_STUB_DECLINED:
-            stub["notes"] = "payment_declined — created by email enricher; review before settling"
-
-        order_result = client.table("orders").insert(stub).execute()
-        if not order_result.data:
-            print(f"  FAIL: could not create stub order for {order_number}")
-            return False
-        order_id = order_result.data[0]["order_id"]
-
-        # Pending shipment row for the stub
-        ship_row: dict = {
-            "user_id":             user_id,
-            "order_id":            order_id,
-            "shipment_status":     "pending",
-            "entry_method":        "email_enricher",
-            "no_invoice_received": True,
-        }
-        if isinstance(p, LegoParsedShippingConfirmation) and p.tracking_number:
-            ship_row["shipment_status"] = "shipped"
-            ship_row["tracking_number"] = p.tracking_number
-            if p.shipment_subtotal is not None:
-                ship_row["subtotal"]   = p.shipment_subtotal
-            if p.shipment_tax is not None:
-                ship_row["tax_amount"] = p.shipment_tax
-
-        ship_result = client.table("shipments").insert(ship_row).execute()
-        if not ship_result.data:
-            print(f"  FAIL: could not create shipment for stub {order_number}")
-            return False
-        shipment_id = ship_result.data[0]["shipment_id"]
-
-        if hasattr(p, "line_items") and p.line_items:
-            rows = _build_line_item_rows(order_id, shipment_id, user_id, p.line_items)
-            li_result = client.table("line_items").insert(rows).execute()
-            if not li_result.data:
-                print(f"  FAIL: line_items insert failed for stub {order_number} — order+shipment rows exist, need manual fix")
-                return False
-
-        label = "payment_declined stub" if plan.action == ACT_STUB_DECLINED else "pending_review stub"
-        print(f"  OK: {label} created for {order_number or 'unknown'}")
+    if plan.action == ACT_FLAG_UNMATCHED:
+        # Manual-entry-first architecture: no order is ever auto-created here.
+        # This is a pure flag — the email sits in the review queue (already shown
+        # to the user via show_review_queue() before this runs) so Josh can check
+        # whether he forgot to enter the order, or something genuinely doesn't match.
+        order_number = getattr(p, "order_number", "") or "unknown"
+        declined_note = " (payment_declined)" if "payment_declined" in plan.notes else ""
+        print(f"  FLAGGED: no matching order for {order_number}{declined_note} — "
+              f"no order created, review queue only. Enter this order manually if missing.")
         return True
 
     if plan.action == ACT_FLAG_DECLINED:

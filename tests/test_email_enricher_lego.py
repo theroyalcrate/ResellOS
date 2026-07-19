@@ -11,9 +11,13 @@ Expected values verified against Supabase (Cowork 2026-07-05):
 Includes all 5 matching test cases from the A-007 spec:
   1. Tier 1 direct match (shipping email → existing order)
   2. Identical totals ($169.33) must NOT be a matching criterion
-  3. Orphan (order not in DB) → pending_review stub
+  3. Orphan (order not in DB) → flag_unmatched, review queue only, no order created
   4. Split shipment (two emails, same order, different tracking)
-  5. Declined email (orphan) → stub with payment_declined flag
+  5. Declined email (orphan) → flag_unmatched with payment_declined noted
+
+Manual-entry-first architecture (revised 2026-07-18): Josh enters orders himself
+via agent_02. This agent never creates orders from email data — an unmatched
+email is always flagged for manual review, never auto-inserted as a stub.
 """
 
 import sys
@@ -25,12 +29,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from agents.email_enricher import (
     ACT_CREATE_SHIPMENT,
-    ACT_CREATE_STUB,
     ACT_ENRICH_ORDER,
     ACT_FLAG_DECLINED,
+    ACT_FLAG_UNMATCHED,
     ACT_RECEIPT_PDF,
     ACT_SKIP,
-    ACT_STUB_DECLINED,
     LineItemData,
     LegoParsedOrderConfirmation,
     LegoParsedPaymentDeclined,
@@ -407,26 +410,26 @@ class TestA007Cascade:
     def test_identical_totals_never_trigger_match(self, order_conf):
         """
         T508056398 and T508221251 both total $169.33.
-        With no order-number match, result is create_stub — never a wrong-order match.
+        With no order-number match, result is flag_unmatched — never a wrong-order match.
         The cascade has no total-based tier, so this is structurally guaranteed.
         """
         plan = plan_enrichment(order_conf, existing_order=None)
-        assert plan.action == ACT_CREATE_STUB
+        assert plan.action == ACT_FLAG_UNMATCHED
         assert plan.matched_order_id is None
         assert plan.matched_order_number is None
 
-    # --- Spec test 3: orphan → pending_review stub, never silently dropped ---
+    # --- Spec test 3: orphan → flag_unmatched, never silently dropped, never auto-created ---
 
-    def test_unmatched_order_confirmation_becomes_stub(self, order_conf):
-        """T508221251 not in DB → pending_review stub is created, not silently dropped."""
+    def test_unmatched_order_confirmation_flagged(self, order_conf):
+        """T508221251 not in DB → flagged for manual review, not silently dropped, no order created."""
         plan = plan_enrichment(order_conf, existing_order=None)
-        assert plan.action == ACT_CREATE_STUB
+        assert plan.action == ACT_FLAG_UNMATCHED
         assert "T508221251" in plan.notes
 
-    def test_unmatched_shipping_becomes_stub(self, ship1):
-        """Shipping email with no matching order → stub with shipment data."""
+    def test_unmatched_shipping_flagged(self, ship1):
+        """Shipping email with no matching order → flagged, no stub or shipment created."""
         plan = plan_enrichment(ship1, existing_order=None)
-        assert plan.action == ACT_CREATE_STUB
+        assert plan.action == ACT_FLAG_UNMATCHED
 
     # --- Spec test 4: split shipment → two separate plans, not duplicates ---
 
@@ -453,12 +456,12 @@ class TestA007Cascade:
         plan2 = plan_enrichment(ship2, existing)
         assert plan1.parsed.tracking_number != plan2.parsed.tracking_number
 
-    # --- Spec test 5: payment declined → orphan stub with payment_declined flag ---
+    # --- Spec test 5: payment declined → flag_unmatched with payment_declined noted ---
 
-    def test_declined_orphan_creates_stub_declined(self, payment_declined):
-        """T507979974 not in DB → stub_declined plan (not silently dropped)."""
+    def test_declined_orphan_flagged_unmatched(self, payment_declined):
+        """T507979974 not in DB → flagged for manual review, no order created."""
         plan = plan_enrichment(payment_declined, existing_order=None)
-        assert plan.action == ACT_STUB_DECLINED
+        assert plan.action == ACT_FLAG_UNMATCHED
         assert "payment_declined" in plan.notes.lower()
 
     def test_declined_existing_order_flags_not_cancels(self, payment_declined):
