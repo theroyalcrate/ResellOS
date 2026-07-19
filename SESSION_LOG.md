@@ -4,9 +4,9 @@
 
 | | |
 |---|---|
-| **Last Updated** | 2026-07-14 |
-| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓, Cowork 2026-07-05 (LEGO email parser spec + fixtures) ✓, Cowork 2026-07-05 (eve — email enricher LEGO parser build) ✓, Cowork 2026-07-13 (pipeline audit + retailer casing fix) ✓, Cowork 2026-07-14 (Zapier connector verification) ✓ |
-| **Next Session** | S10 (variable-earn schema + Agent 1B live test) — all blocking decisions now resolved |
+| **Last Updated** | 2026-07-18 |
+| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓, Cowork 2026-07-05 (LEGO email parser spec + fixtures) ✓, Cowork 2026-07-05 (eve — email enricher LEGO parser build) ✓, Cowork 2026-07-13 (pipeline audit + retailer casing fix) ✓, Cowork 2026-07-14 (Zapier connector verification) ✓, Cowork 2026-07-18 (eve — OAuth publish fix, invoice_files schema drift fix, first successful Agent 1B live filing) ✓ |
+| **Next Session** | S10 (variable-earn schema) — Agent 1B is now live-tested and working. Highest-leverage next step is Tier 2 PDF-content matching before bulk-filing the 201-email backlog (see Open Questions). |
 | **Phase** | P1 — Week 2 |
 | **GitHub** | theroyalcrate/ResellOS |
 
@@ -16,26 +16,24 @@
 
 ## Start Here — Next Session
 
-### S10 — Variable-Earn Schema + Agent 1B Live Test *(after June 10 CPA meeting)*
+**Agent 1B live test is DONE (2026-07-18 evening) — first real invoice filed end-to-end.** Order T469280178's receipt PDF was downloaded from Gmail, uploaded to Drive, logged in the `invoice_files` ledger, and the Gmail label transitioned — all verified independently via direct Supabase/Gmail/Drive checks, not just trusted from a single report. Full detail in the Session History entry below. This closes out the "stalled" period flagged on 2026-07-14 — but it also surfaced a bigger matching gap (Step 1 below) that needs solving before the rest of the backlog can file cleanly.
 
-**Step 1 — Agent 1B live test (do this first, takes 5 minutes):**
-- Agent 1B is built (50/50 unit tests passing). Now has 5 modes: 1=Preview, 2=File one, 3=Ledger, 4=Personal backfill, 5=Safety filter.
-- Run `python setup_oauth.py` first — this now sets up BOTH business token (token_business.json) and personal token (token_personal.json). Two browser windows will open — follow console prompts.
-- Then run Mode 1 preview: `python agents/agent_01b_invoice_filing.py` → select 1. Review the queue, confirm one invoice looks right.
-- Then run Mode 4 to backfill personal Gmail history → select 4. Review the summary log.
-- Then run Mode 2 to file one business invoice → select 2.
-- Then run Mode 5 to create the personal safety-net filter → select 5.
-- **Do not file broadly until at least one real invoice is verified end-to-end** (Gmail → Drive → ledger → label transition).
-- Migration 012 (`invoice_files` ledger) was applied 2026-06-10 — already in Supabase.
+### Step 1 — Build Tier 2 PDF-content matching (new highest-leverage item, found 2026-07-18):
+Tonight's test exposed that `extract_order_number_from_subject()` in `agents/agent_01b_invoice_filing.py` only matches subjects containing "Order" or "Invoice" + digits — but the only LEGO email type that carries a PDF attachment (the "Receipt" type, e.g. `no-reply-billing03@lego.com`) has neither in its subject line. The order number only exists inside the PDF itself. This means Tier 1 subject-matching fails on essentially every LEGO receipt email regardless of whether the order is already in Supabase — likely affecting most or all of the 201-email business-inbox backlog, not just tonight's test order. `invoice_parser.py` (Agent 1A) already does PDF-content extraction elsewhere in this repo — next session should design how that hooks into Agent 1B's matching cascade as the real Tier 2, rather than filing the whole backlog as UNMATCHED.
 
-**Step 2 — CPA meeting outcome (resolved 2026-06-21):**
-- FIFO and cashback tax treatment turned out to be personal-preference choices — the CPA will work with whichever way Josh decides, no CPA-mandated answer is coming. Not blocked on external guidance anymore.
-- Still needed: Josh's own decision on each, written up as ADR-019 (FIFO) once made; cashback layer activation decision; Capital One chain `gift_cards.price_paid` write path decision.
-- Record full answers in `Projects/cpa-meeting/cpa-meeting-2026-06-10.md` when ready.
+### Step 2 — Quick closes from 2026-07-14 findings, still open (~10 min):
+- Pin Fred Meyer's exact order-confirmation subject line (tentative guess was "order placed" — not confirmed enough to filter on). Open a real Fred Meyer order email and copy the literal text into `references/retailer_email_sources.md`.
+- Check whether Walgreens' `Walgreens@ecs.walgreens.com` is mixed-use like Disney Store/Fred Meyer (marketing + orders) or order-only. If mixed, needs a subject discriminator too.
+- These close out the retailer email-sourcing thread completely — after this, every retailer with real order history has a fully specified (sender + subject where needed) filter definition ready to build.
 
-**Step 3 — S10 schema work (see S10 section below).**
+### Step 3 — Decide the Map 2 mechanism (a decision, not more research):
+Three options already documented in `references/retailer_email_sources.md`: (a) native Gmail filter (what LEGO's Mode 5 already does, extend past LEGO), (b) a Zap built in Zapier's own dashboard, (c) manual/session-based. Pick one so the eventual Mac mini filter-building session has a settled approach to execute, not another open question.
 
-**Note on Migration 012 numbering:** The local file is `012_invoice_files_ledger.sql` but S10 had planned to use 012 for `account_type` on `retailer_profiles`. The invoice_files migration was applied in Supabase during this session (2026-06-10) and takes 012. The `account_type` migration is now 013, and `block_identifier` is 014.
+### Step 4 — S10 schema work (variable-earn schema, Kohl's Cash earn cliff) — see S10 section below.
+
+### Step 5 — Bulk-file the remaining ~200-email backlog — hold until Step 1 (Tier 2 matching) exists, otherwise every file lands UNMATCHED in `_unmatched/` folders with no order linkage.
+
+**Note on Migration 012 numbering:** The local file is `012_invoice_files_ledger.sql` but S10 had planned to use 012 for `account_type` on `retailer_profiles`. The invoice_files migration was applied in Supabase 2026-06-10 and takes 012. The `account_type` migration is now 013, and `block_identifier` is 014.
 
 ---
 
@@ -84,8 +82,8 @@
 | Pre-S09 (2026-06-03) | Vault content phase: lego.md + lego-instore.md + email-order-matching.md committed to Knowledge vault. GitHub MCP read access confirmed. CONTEXT.md + SESSION_LOG.md corrected. A-007 in CONTEXT.md. | ✓ Complete |
 | S09 | Kohl's retailer note (5 real orders), tax correction (DECISION 018), migration 011, CONTEXT.md + SESSION_LOG.md updated | ✓ Complete |
 | Pre-S10 (2026-06-07) | Knowledge vault phase 2: CPA prep note, Macy's note, Amazon note. Architecture decision: account_type migration needed for retailer_profiles (Amazon + Walmart). | ✓ Complete |
-| Pre-S10 Agent 1B (2026-06-10) | Agent 1B invoice filing built: pure-logic functions, 50 unit tests, I/O layer (Gmail/Drive/Supabase), migration 012 (invoice_files), .gitignore UTF-8 fix, setup_oauth.py. Code-reviewed — 6 bugs fixed. Needs live test (Mode 1 preview, then Mode 2 one invoice). | ✓ Built, pending live test |
-| Pre-S10 Agent 1B+1C (2026-06-17) | Agent 1B extended with personal Gmail backfill (Mode 4) + safety-net filter (Mode 5). setup_oauth.py rewritten for two tokens. 4 code-review bugs fixed. Needs live test of all 5 modes. | ✓ Built, pending live test |
+| Pre-S10 Agent 1B (2026-06-10) | Agent 1B invoice filing built: pure-logic functions, 50 unit tests, I/O layer (Gmail/Drive/Supabase), migration 012 (invoice_files), .gitignore UTF-8 fix, setup_oauth.py. Code-reviewed — 6 bugs fixed. Mode 2 live-tested successfully 2026-07-18 (see Cowork 2026-07-18 session). | ✓ Complete |
+| Pre-S10 Agent 1B+1C (2026-06-17) | Agent 1B extended with personal Gmail backfill (Mode 4) + safety-net filter (Mode 5). setup_oauth.py rewritten for two tokens. 4 code-review bugs fixed. Mode 2 live-tested successfully 2026-07-18; Modes 4/5 still untested. | ✓ Mode 2 live-tested, 4/5 pending |
 | Pre-S10 Agent 1C standalone (2026-06-17) | Agent 1C built as separate script (agents/agent_01c_historical_backfill.py). 3 modes: Preview, Copy, Ledger. LEGO senders only (billing03 + m.lego.com), Feb 2025–Jun 2026. Mode 1 confirmed 748 emails. Mode 2 copy run. OAuth issues resolved (personal token was wrong file; business token 7-day expiry on test app). | ✓ Complete |
 | Cowork 2026-06-20 | Auth-vs-enrichment scraping architecture decision logged. 4 orders captured outside priority backlog (T507760965, T507761629, T507771505, T507787478 — 2026-06-19/20). Scrape priority system documented in CONTEXT.md. | ✓ Complete |
 | Cowork 2026-06-21 | Architecture review (ADR-020 proposed: cost basis regression testing, before Agent 1C bulk backfill). Live Supabase check: only 5 orders exist, cost_basis_state never advances past "estimated" even on a fully-settled order. Found Brickprobe file + consolidated all scrape working files from the "ResellOS software development" project folder into this repo. Confirmed GitHub/Gmail/Drive connectors live in Cowork. CPA outcome clarified (FIFO/cashback are personal choice). Investigated and rejected installing GSD ("get-shit-done") — confirmed compromised original maintainer, unresolved security gaps in community fork. Root-caused cross-surface context drift; resell-os-session-start skill created; project-knowledge paste-in deleted. | ✓ Complete |
@@ -95,7 +93,8 @@
 | Cowork 2026-06-28 (eve) | Kohl's 2026 behavior changes documented in kohls.md (ResellOS-Knowledge vault): provisional earn model (~$70 drift, $530 final on June batch), unit repricing on partial cancel, promotional_cash status vocabulary (pending→issued→redeemed→expired), in-store WiFi free shipping tactic. No code changes. | ✓ Complete |
 | Cowork 2026-07-05 | LEGO email parser spec + 5 real fixtures + A-007 order-confirmation correction | ✓ Complete |
 | Cowork 2026-07-05 (eve) | `agents/email_enricher.py` — LEGO parser module (908 lines). 72 tests passing. 5 code-review bugs fixed. No live Gmail run. | ✓ Complete |
-| S10 | Phase 3: variable-earn schema + account_type migration (013) + Kohl's Cash block model (014) + all decisions now resolved + Agent 1B live test (all 5 modes) | ⏳ Next |
+| Cowork 2026-07-18 (eve) | OAuth publish-status fix (Testing→Production, resolves 7-day token expiry). invoice_files schema drift found + fixed live via Supabase MCP (missing user_id column, wrong RLS policy). Sender-detection widened (`e.lego.com` → `lego.com` generally), committed `b4248bf`. Order T469280178 entered into Supabase. First successful Agent 1B Mode 2 filing — verified independently. Tier 2 PDF-content matching gap found (not fixed — see Open Questions). | ✓ Complete |
+| S10 | Phase 3: variable-earn schema + account_type migration (013) + Kohl's Cash block model (014). Agent 1B Modes 4/5 + Tier 2 matching + backlog bulk-file still pending. | ⏳ Next |
 
 ---
 
@@ -104,18 +103,60 @@
 **Supabase PostgreSQL — Live**
 
 - **23** tables live (invoice_files added — migration 012 applied 2026-06-10)
-- Migrations applied through **012**
-- **8** orders in DB (T487170400, T507760965, T507761629, T507771505, T507787478, T508041747, T508056398, T508059246)
+- Migrations applied through **012**, plus an unlogged fix **012b_invoice_files_user_id_fix** applied directly via Supabase MCP 2026-07-18 (added missing `user_id uuid NOT NULL` column + corrected RLS policy on `invoice_files` — the live table had drifted from what migration 011/012 documents since 2026-06-10). **Local `migrations/` folder does not yet have a matching .sql file for this — add one next Claude Code session.**
+- **9** orders in DB (T487170400, T507760965, T507761629, T507771505, T507787478, T508041747, T508056398, T508059246, T469280178)
+- **1** row in `invoice_files` (was 0) — first successful Agent 1B filing, `order_id null` (unmatched — see Open Questions, Tier 2 matching gap)
 - **211** gift cards in gift_cards table: 36 LEGO (giftcards.com, $250/$225/10%, Jun 14–21 2026) + 175 non-LEGO (B&N 139, Kohl's 15, Target 21 — imported 2026-06-28 from lgc_2026.xlsx; 44 active cards, $3,631.69 available balance)
 - **RLS ON** — every table secured
 - **Multi-user** — user_id on every table
-- Code committed to GitHub (note: GitHub MCP not currently connecting — verify via Claude Code)
+- Code committed to GitHub (confirmed live and working via GitHub MCP 2026-07-18)
 
 **Key tables confirmed live:** orders (+ cost_basis_state, buy_reason, purchase_trigger), shipments, line_items (+ set_number, is_retiring), inventory, sales, gift_cards, gift_card_assignments, rewards_transactions, cashback_transactions, gwp (+ status, net_proceeds, sale_date, settlement_date), tax_recovery, market_events, promotional_cash, returns, retailer_profiles, retailer_cashback_profiles, portal_health, business_expenses, inventory_check_sessions, inventory_check_items, users (+ gwp_cost_treatment, costing_method) — 22 tables total.
 
 ---
 
 ## Session History
+
+### Cowork 2026-07-18 (eve) — OAuth Fix + Schema Drift Fix + First Successful Agent 1B Filing ✓ Done — 2026-07-18
+
+**Context:** Cowork session, working jointly with Claude Code in VS Code. Continued from 2026-07-14's stall — this session finally produced a working filed invoice, but only after clearing three real blockers along the way, each verified independently rather than trusted from a single source.
+
+**Blocker 1 — Google Cloud OAuth (Testing status, 7-day token expiry):** Both `token_business.json` and `token_personal.json` were dead (`invalid_grant` on refresh). Root cause confirmed live in Google Cloud Console: the `resellos-agent1b` OAuth consent screen was still in **Testing** publishing status, which caps refresh tokens at 7 days — matches the exact issue flagged back on 2026-06-17 but never fixed. Both accounts were already correctly listed as test users (2/100 cap), so that wasn't it. Fixed: published the app to **Production** (approved by Josh — safe here since it's an unverified app used only by Josh's own two accounts; new sign-ins now see a "Google hasn't verified this app" click-through, which is expected). Deleted the stale token files and re-ran `setup_oauth.py` — both tokens regenerated fresh, dated 2026-07-18.
+
+**Test order selected — T469280178:** Josh chose an order with sets that fully sold last year (so real sales data exists for future cost-basis verification) as the Agent 1B test candidate. Found via Zapier's personal Gmail connection (`joshua.buckingham@gmail.com`, confirmed live — 13 Gmail + 16 Drive actions) and cross-verified directly in the business Gmail inbox: the receipt email (`no-reply-billing03@lego.com`, message `1978aadb673df73c`) was already sitting under the `ResellOS-Invoices` label — Agent 1C's 2026-06-17 backfill pass had already copied it over, it just had never been filed.
+
+**Order entered into Supabase:** Claude Code pulled the actual PDF invoice content directly (not from memory) — real set numbers 21343 (Viking Village V39, $129.99), 40793 (Tom & Jerry Figures V39, $14.99), 40517 (Vespa V39, $9.99), 40766 (Tribute to Jane Austen's Books V39, $0 GWP, $24.99 MSRP). Subtotal $154.97, tax $16.04, total $171.01, paid entirely by gift card. `buy_reason`/`purchase_trigger` left null (genuinely unknown a year later — a supported default state, not a gap). Gift card entered as **unlinked** — no matching `gift_cards` record; Josh confirmed this is a known, planned gap (historical gift-card linkage needs manual backfill or a future LEGO-account scrape, tracked separately, not an `agent_02` bug). Landed as `order_id 4db2be29-3316-4956-95b4-5aff8f7f5f03`, 4 line items, 1007 Insider points.
+
+**Blocker 2 — matching gap in Agent 1B (found, not fully fixed):** `extract_order_number_from_subject()` only matches subjects containing "Order"/"Invoice" + digits. LEGO's "Receipt" email type — the *only* LEGO email type that carries a PDF attachment — has neither, so Tier 1 subject-matching returns `None` immediately regardless of Supabase state. Tier 2 (PDF-content matching) was never built; the docstring already flags this as deferred. **This likely affects most or all of the 201-email business-inbox backlog**, not just tonight's order — flagged as the new top open item, not fixed tonight (too big a change to rush). Separately, `detect_retailer_from_sender()` only matched `"e.lego.com"` — widened to match `"lego.com"` generally, tested (50/50 pass), reviewed, committed as `b4248bf`.
+
+**Blocker 3 — invoice_files schema drift (found and fixed):** First Mode 2 filing attempt got the PDF into Drive but failed writing the ledger row: `column invoice_files.user_id does not exist` (Postgres 42703, not a PostgREST cache issue — confirmed directly). The live table was missing the `user_id uuid NOT NULL` column that `migrations/012_invoice_files_ledger.sql` specifies, and had a completely different RLS policy (`"Users can view their own invoice files"`) that derived ownership by joining through `orders.user_id` off `order_id` — meaning any row with `order_id IS NULL` (every unmatched filing) was readable/writable by any authenticated user. Whoever applied migration `20260611041822` (011_invoice_files_ledger) back on 2026-06-10 ran a hand-modified version that was never synced back to the local file — same "doc went stale" pattern as several earlier findings this project has hit. **Fixed directly via Supabase MCP** (table confirmed empty, 0 rows, so no backfill needed): added `user_id uuid NOT NULL`, dropped the ad-hoc policy, recreated the documented `invoice_files_user_policy`. Verified live post-fix: column exists, policy named correctly. **Local `migrations/` folder still needs a matching `.sql` file for this fix (012b) — not yet created.**
+
+**First successful Agent 1B Mode 2 filing — verified independently, not just trusted:**
+- Manually deleted the orphaned Drive file from the failed first attempt (`Invoices/Unknown/_unmatched/1978aadb673df73c_UNKNOWN_2025-06-20.pdf`) before re-running, to avoid a duplicate.
+- Re-ran Mode 1 (Preview) → confirmed retailer now resolves to `Lego`, still correctly UNMATCHED (Tier 2 gap, expected).
+- Re-ran Mode 2 (File one) → succeeded fully. Verified directly: Drive file `Invoices/Lego/_unmatched/1978aadb673df73c_LEGO_2025-06-20.pdf` (ID `1yf6ND3VKdK6xpMRCwhlcjPpK_J7tZG_4`, 9,773 bytes — matches original attachment size exactly). `invoice_files` row `id 2796fac5-39a2-42bf-b143-53674f8ef962`, `order_id null` (expected, unmatched), `retailer LEGO`. Gmail message `1978aadb673df73c` now carries only `Label_1` (`ResellOS-Filed`) — `ResellOS-Invoices` label removed. **This is the first row ever written to `invoice_files` and the first successful Agent 1B Mode 2 run** — Agent 1B had been "built, pending live test" since 2026-06-17, over a month.
+
+**Cosmetic bug found, not fixed:** `transition_label()`'s success message (`print("  OK: Label → ResellOS-Filed")`) contains a `→` character that crashes on Windows' cp1252 console encoding. That crash gets caught by the same `try/except` wrapping the real label-transition API call, so a successful transition prints a false `WARNING: Label transition failed` message. Verified the real state directly via the Gmail API rather than trusting the printed warning — it had actually succeeded. Low priority, but worth fixing since it currently makes a real future failure indistinguishable from this false one.
+
+**Not done (deferred):**
+- Tier 2 PDF-content matching (new top item — see Start Here)
+- Local `migrations/012b_invoice_files_user_id_fix.sql` file (schema change is live, local file is missing)
+- Bulk-filing the remaining ~200-email backlog — hold until Tier 2 matching exists, or they'll all land UNMATCHED
+- Historical gift-card linkage for T469280178 and similar backfilled orders
+- Modes 4 (personal backfill) and 5 (safety filter) of Agent 1B still untested
+
+**Commit message (code changes, via Claude Code):**
+```
+Cowork 2026-07-18: widen detect_retailer_from_sender() to match lego.com generally (was e.lego.com only), fixes retailer detection on receipt-type LEGO emails
+```
+
+**Schema change (applied directly via Supabase MCP, not yet mirrored to a local migration file):**
+```
+012b_invoice_files_user_id_fix: ADD COLUMN user_id uuid NOT NULL, replaced ad-hoc RLS
+policy with invoice_files_user_policy — closes drift from migration 20260611041822
+```
+
+---
 
 ### Cowork 2026-07-14 — Zapier Connector Verification (Gmail + Drive) ✓ Done — 2026-07-14
 
@@ -888,6 +929,14 @@ S04: Fix split payment capture — collect all payment legs, set mixed
 
 **Do not install GSD / "get-shit-done" into this repo (new 2026-06-21):** Original maintainer confirmed compromised (crypto rug-pull, retains npm publish rights to the original package). Community fork (`get-shit-done-redux`) audited clean of backdoors but has unresolved advisory-only security guardrails and a file-exfiltration risk pattern. This repo holds live credentials (`.env`, `credentials/`, OAuth tokens) — don't install either version here. See CONTEXT.md guardrail note.
 
+**Agent 1B Tier 2 PDF-content matching not built (new 2026-07-18, high priority):** `extract_order_number_from_subject()` only matches subjects with "Order"/"Invoice" + digits. LEGO's "Receipt" email type — the only LEGO email type carrying a PDF attachment — has neither, so subject-based matching fails on it regardless of Supabase state. Likely affects most/all of the 201-email business-inbox backlog. `invoice_parser.py` (Agent 1A) already does PDF extraction elsewhere in this repo — next step is designing how it hooks into Agent 1B's matching cascade as the real Tier 2.
+
+**Historical gift-card linkage gap (new 2026-07-18):** Orders backfilled from old invoices (e.g. T469280178) show "paid by gift card" on the invoice but the invoice never prints which card. Needs either manual entry from memory/records or a future LEGO-account scrape to recover card numbers. Entered as unlinked gift card payment for now — a planned gap, not a bug.
+
+**Cosmetic Unicode crash in transition_label() (new 2026-07-18):** The success print statement uses a `→` character that crashes on Windows cp1252 console encoding; the crash is caught by the same try/except wrapping the real API call, producing a false "Label transition failed" warning on actual success. Low priority but should be fixed since it undermines trust in the script's own error messages — a real future failure would look identical to this false one.
+
+**Local migrations/ folder missing 012b (new 2026-07-18):** `invoice_files.user_id` + RLS policy fix was applied directly to Supabase via MCP (table was empty, no backfill needed) but has no corresponding file in the repo's `migrations/` folder yet. Add `012b_invoice_files_user_id_fix.sql` next Claude Code session so the local reference stops silently diverging from live state again.
+
 ---
 
 ## How to Use This Document
@@ -896,6 +945,6 @@ S04: Fix split payment capture — collect all payment legs, set mixed
 
 **End of session:** Update this document before closing VS Code. Record what was completed, what was deferred, commit message, and next session goal. Update the repo copy via Claude Code first, then sync the project copy.
 
-**Tool access reality:** Chat-Claude can reach Supabase directly but NOT GitHub or the local repo. Claude Code reads/writes the local repo. Route local file work through Claude Code.
+**Tool access reality:** Chat-Claude (claude.ai) can reach Supabase directly but NOT GitHub or the local repo. Claude Code reads/writes the local repo. Route local file work through Claude Code. **Cowork is a distinct third surface** with broader access than plain chat-Claude — confirmed live 2026-07-18: direct read/write to the local repo folder (mounted), direct GitHub commit access (`create_or_update_file`/`push_files`), and direct Supabase access including schema DDL (`apply_migration`). When working in Cowork, don't assume the older two-surface split above still applies — verify what's actually connected rather than defaulting to "can't reach GitHub."
 
 **What this document supersedes:** The Project Map session descriptions, the Ideas doc sequencing section, and any Claude memory about SQLite. If there's a conflict, this document wins.
