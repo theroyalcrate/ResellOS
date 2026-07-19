@@ -27,9 +27,17 @@ and add: gmail.modify, gmail.settings.basic, drive.file
 
 import os
 import sys
+import requests
+import urllib3
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+
+# Python 3.14 + Windows SSL interceptor workaround (see db_client.py get_client()
+# for the same root cause on the Supabase side). Safe for a local CLI tool.
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+_INSECURE_SESSION = requests.Session()
+_INSECURE_SESSION.verify = False
 
 _CREDS_DIR   = os.path.join(os.path.dirname(__file__), "credentials")
 _CREDS_FILE  = os.path.join(_CREDS_DIR, "credentials.json")
@@ -67,7 +75,7 @@ def _setup_account(token_path: str, scopes: list, label: str) -> None:
 
     if creds and creds.expired and creds.refresh_token:
         print(f"  Refreshing {label} token...")
-        creds.refresh(Request())
+        creds.refresh(Request(session=_INSECURE_SESSION))
     else:
         print(f"\n  A browser window will open.")
         print(f"  Sign in with your {label} Gmail account.")

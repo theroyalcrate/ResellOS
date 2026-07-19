@@ -57,6 +57,9 @@ import base64
 import io
 import re
 import sys
+import httplib2
+import requests
+import urllib3
 from datetime import date, datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -64,11 +67,25 @@ from typing import Optional
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from db_client import get_client, PHASE_1_USER_ID
+
+# Python 3.14 + Windows SSL interceptor workaround (see db_client.py get_client()
+# for the same root cause on the Supabase side). Safe for a local CLI tool.
+# Two transports need patching: `requests` (used by google-auth for token
+# refresh) and `httplib2` (used by googleapiclient for the actual Gmail/Drive
+# API calls) — they don't share a cert store.
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+_INSECURE_SESSION = requests.Session()
+_INSECURE_SESSION.verify = False
+
+
+def _insecure_http() -> httplib2.Http:
+    return httplib2.Http(disable_ssl_certificate_validation=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -131,7 +148,10 @@ RETAILER_DRIVE_FOLDER: dict[str, str] = {
 _SENDER_RETAILER: list[tuple[str, str]] = [
     ("businessinfo@walmart.com", "WALMART BUSINESS"),
     ("help@walmart.com",         "WALMART"),
-    ("e.lego.com",               "LEGO"),
+    # Broad "lego.com" (not just "e.lego.com") — covers every known LEGO sender
+    # domain: e.lego.com (order confirmations), billingNN@lego.com (receipts),
+    # t.crm.lego.com (2026 sender). All contain "lego.com" as a substring.
+    ("lego.com",                 "LEGO"),
     ("kohls.com",                "KOHLS"),
     ("macys.com",                "MACYS"),
     ("target.com",               "TARGET"),
@@ -299,7 +319,7 @@ def _load_creds(token_path: Path, scopes: list[str]) -> Optional[Credentials]:
     creds = Credentials.from_authorized_user_file(str(token_path), scopes)
     if not creds.valid:
         if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            creds.refresh(Request(session=_INSECURE_SESSION))
             token_path.write_text(creds.to_json())
         else:
             # Token expired with no refresh_token (revoked or never issued).
@@ -326,8 +346,9 @@ def build_business_services():
         print("  Run: python setup_oauth.py --business")
         sys.exit(1)
 
-    gmail = build("gmail", "v1", credentials=creds)
-    drive = build("drive", "v3", credentials=creds)
+    authed_http = AuthorizedHttp(creds, http=_insecure_http())
+    gmail = build("gmail", "v1", http=authed_http)
+    drive = build("drive", "v3", http=authed_http)
     return gmail, drive
 
 
@@ -342,7 +363,8 @@ def build_personal_gmail():
         print("  APIs & Services → OAuth consent screen → Data Access:")
         print("    gmail.modify, gmail.settings.basic, drive.file")
         sys.exit(1)
-    return build("gmail", "v1", credentials=creds)
+    authed_http = AuthorizedHttp(creds, http=_insecure_http())
+    return build("gmail", "v1", http=authed_http)
 
 
 # --------------------------------------------------------------------------- #
