@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Last Updated** | 2026-07-18 |
-| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓, Cowork 2026-07-05 (LEGO email parser spec + fixtures) ✓, Cowork 2026-07-05 (eve — email enricher LEGO parser build) ✓, Cowork 2026-07-13 (pipeline audit + retailer casing fix) ✓, Cowork 2026-07-14 (Zapier connector verification) ✓, Cowork 2026-07-18 (eve — OAuth publish fix, invoice_files schema drift fix, first successful Agent 1B live filing) ✓ |
-| **Next Session** | S10 (variable-earn schema) — Agent 1B is now live-tested and working. Highest-leverage next step is Tier 2 PDF-content matching before bulk-filing the 201-email backlog (see Open Questions). |
+| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓, Cowork 2026-07-05 (LEGO email parser spec + fixtures) ✓, Cowork 2026-07-05 (eve — email enricher LEGO parser build) ✓, Cowork 2026-07-13 (pipeline audit + retailer casing fix) ✓, Cowork 2026-07-14 (Zapier connector verification) ✓, Cowork 2026-07-18 (eve — OAuth publish fix, invoice_files schema drift fix, first successful Agent 1B live filing) ✓, Cowork 2026-07-18 (late — manual-entry-first architecture decision + Agent 09 Purchase Planner built) ✓ |
+| **Next Session** | S10 (variable-earn schema) — Agent 1B is now live-tested and working. Highest-leverage next step is Tier 2 PDF-content matching before bulk-filing the 201-email backlog (see Open Questions). Agent 09 Purchase Planner is built and ready to use for the next planned buying session, but untested against a real one yet. |
 | **Phase** | P1 — Week 2 |
 | **GitHub** | theroyalcrate/ResellOS |
 
@@ -33,7 +33,7 @@ Three options already documented in `references/retailer_email_sources.md`: (a) 
 
 ### Step 5 — Bulk-file the remaining ~200-email backlog — hold until Step 1 (Tier 2 matching) exists, otherwise every file lands UNMATCHED in `_unmatched/` folders with no order linkage.
 
-**Note on Migration 012 numbering:** The local file is `012_invoice_files_ledger.sql` but S10 had planned to use 012 for `account_type` on `retailer_profiles`. The invoice_files migration was applied in Supabase 2026-06-10 and takes 012. The `account_type` migration is now 013, and `block_identifier` is 014.
+**Note on Migration 012 numbering:** The local file is `012_invoice_files_ledger.sql` but S10 had planned to use 012 for `account_type` on `retailer_profiles`. The invoice_files migration was applied in Supabase 2026-06-10 and takes 012. The `account_type` migration is now 013, and `block_identifier` is 014. **015 is now taken too** — `migrations/015_purchase_plans.sql` (Agent 09 Purchase Planner schema: `purchase_plans` + `purchase_plan_items`), applied live via Supabase MCP 2026-07-18 under the MCP migration name `014_purchase_plans` before the local file was renumbered — same tolerated name/number mismatch pattern as migration 012. Next open slot is **016**.
 
 ---
 
@@ -102,8 +102,8 @@ Three options already documented in `references/retailer_email_sources.md`: (a) 
 
 **Supabase PostgreSQL — Live**
 
-- **23** tables live (invoice_files added — migration 012 applied 2026-06-10)
-- Migrations applied through **012**, plus an unlogged fix **012b_invoice_files_user_id_fix** applied directly via Supabase MCP 2026-07-18 (added missing `user_id uuid NOT NULL` column + corrected RLS policy on `invoice_files` — the live table had drifted from what migration 011/012 documents since 2026-06-10). **Local `migrations/` folder does not yet have a matching .sql file for this — add one next Claude Code session.**
+- **25** tables live (invoice_files added — migration 012 applied 2026-06-10; purchase_plans + purchase_plan_items added — migration 015 applied 2026-07-18)
+- Migrations applied through **012**, plus an unlogged fix **012b_invoice_files_user_id_fix** applied directly via Supabase MCP 2026-07-18 (added missing `user_id uuid NOT NULL` column + corrected RLS policy on `invoice_files` — the live table had drifted from what migration 011/012 documents since 2026-06-10). **Local `migrations/` folder does not yet have a matching .sql file for this — add one next Claude Code session.** Migration **015** (`purchase_plans` schema) applied live via Supabase MCP 2026-07-18, local file present and matches live schema.
 - **9** orders in DB (T487170400, T507760965, T507761629, T507771505, T507787478, T508041747, T508056398, T508059246, T469280178)
 - **1** row in `invoice_files` (was 0) — first successful Agent 1B filing, `order_id null` (unmatched — see Open Questions, Tier 2 matching gap)
 - **211** gift cards in gift_cards table: 36 LEGO (giftcards.com, $250/$225/10%, Jun 14–21 2026) + 175 non-LEGO (B&N 139, Kohl's 15, Target 21 — imported 2026-06-28 from lgc_2026.xlsx; 44 active cards, $3,631.69 available balance)
@@ -155,6 +155,31 @@ Cowork 2026-07-18: widen detect_retailer_from_sender() to match lego.com general
 012b_invoice_files_user_id_fix: ADD COLUMN user_id uuid NOT NULL, replaced ad-hoc RLS
 policy with invoice_files_user_policy — closes drift from migration 20260611041822
 ```
+
+---
+
+### Cowork 2026-07-18 (late) — Manual-Entry-First Architecture Decision + Agent 09 Purchase Planner Built ✓ Done — 2026-07-18
+
+**Context:** Continuation of the same evening's Cowork session, after the Agent 1B live-filing work above. Josh stepped back to a bigger architecture question before continuing with email-agent automation.
+
+**Manual-entry-first order architecture decided:** Until the ResellOS Chrome extension can capture orders directly from LEGO/Walmart/Kohl's/Target at the point of purchase, Josh enters every order himself via `agent_02` — set numbers, gift card linkage, and reward detail are unreliable or absent from confirmation/receipt emails (confirmed directly: no LEGO receipt ever prints the gift card number used). Email agents (Agent 1B, `email_enricher.py`) are downgraded from an order source to a verification/tracking layer: file the invoice, match it to the order Josh already entered, flag discrepancies — never originate or auto-create an order. Full detail in CONTEXT.md's Architecture Decisions table.
+
+**`email_enricher.py` stub-creation removed:** `ACT_CREATE_STUB`/`ACT_STUB_DECLINED` (built an `orders` insert dict and wrote it for any unmatched email) replaced with a single `ACT_FLAG_UNMATCHED` — no DB write, review-queue only, so Josh can check whether he forgot to enter the order or something genuinely doesn't match. `_build_stub_order_row()` deleted entirely. Tests updated in lockstep (`test_email_enricher_lego.py`): 4 tests renamed/reassert `ACT_FLAG_UNMATCHED`. Verified 72/72 relevant tests + 122/122 full suite passing before this change; committed as `1f01bbf` via Claude Code (GitHub MCP write access 403'd — see Known Issue below).
+
+**Purchase Planner (Agent 09) designed and built:** Josh's ask — a planning tool for buying sessions where GWP thresholds, sale prices, or double-points events are known ahead of time, so the math (minimum overspend to hit a threshold, gift card constraints, points available) is worked out before he's standing at checkout. Confirmed as its own standalone script, not a mode inside `agent_02` — and GWP/sale thresholds are always typed in by hand, never predicted (patterns exist but change too often to automate without adding noise).
+
+- **Schema:** `migrations/015_purchase_plans.sql` — `purchase_plans` (one row per buying session: target_type, target_value, gift card link/balance snapshot, Insider points available, status draft→ready→placed) + `purchase_plan_items` (target sets: price, GWP/sale eligibility, max quantity to consider). Both RLS-enabled, applied live via Supabase MCP and confirmed via `list_tables`. See numbering note above — this is 015, not 013/014 (both already reserved for S10 work).
+- **Script:** `agents/agent_09_purchase_planner.py` — menu-driven CLI (create plan, add items, run calculator, mark ready, place order). Calculator is a brute-force search over each item's quantity range (0..max_quantity), bounded by a 200,000-combination safety guard, because a realistic buying session (a handful of sets, small max quantities) doesn't need anything more elaborate — and brute force is easy for Josh to trust because every combination it found is available to show, not just the winner. Three target types: `gwp_threshold`/`points_tier` (minimize spend to reach or exceed the target) and `spend_cap` (maximize spend without exceeding it). Reuses `normalize_retailer` and `LEGO_POINTS_PER_DOLLAR` from `agent_02_order_entry.py` (shared facts, not interactive logic — importing the module doesn't run any of its prompts) rather than re-deriving them and risking drift.
+- **Never writes real orders:** placing a plan marks it `placed` and prints a paste-ready cheat sheet (set name, number, quantity, price) for the `agent_02` prompts — Josh still confirms every line against the real invoice there. This is what keeps Agent 09 from becoming a second, unintended order source under the architecture decision above.
+- **Tests:** `tests/test_agent_09_purchase_planner.py`, 16 tests covering the points formula (round-half-up, matches `agent_02`'s), the combination search for all three target types, the oversized-search-space guard, gift card fit, and output formatting. All 16 pass; full suite 138/138 passing (122 prior + 16 new).
+- **CONTEXT.md updated:** Purchase Planner design write-up added to "Planned Future Systems," manual-entry-first architecture decision added to the Architecture Decisions table. **Not yet pushed to GitHub as of this entry — GitHub MCP write access is 403'ing (see Known Issue below); routing through Claude Code.**
+
+**Known issue — GitHub MCP write access 403'ing:** `create_or_update_file` returned `403 Resource not accessible by integration` three times this session (SESSION_LOG.md, `email_enricher.py`, CONTEXT.md), even after Josh changed the GitHub App's permission to "Contents: Read and write" mid-session. Root cause not confirmed — likely needs a GitHub App installation re-approval step, not just the permission checkbox. Every push this session was routed through Claude Code instead (worked every time). Revisit the App permission/installation state before assuming GitHub MCP writes work again.
+
+**Not done (deferred):**
+- Agent 09 hasn't been used against a real buying session yet — first real use will be the actual test.
+- No programmatic pre-fill into `agent_02` (the cheat sheet is manual copy — refactoring `agent_02` into a callable function so a plan could inject values directly is a natural follow-up, not built now).
+- GitHub MCP write access still broken — needs the App installation checked, not just its permissions.
 
 ---
 
