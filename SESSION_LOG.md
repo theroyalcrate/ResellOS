@@ -4,9 +4,9 @@
 
 | | |
 |---|---|
-| **Last Updated** | 2026-07-19 |
-| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓, Cowork 2026-07-05 (LEGO email parser spec + fixtures) ✓, Cowork 2026-07-05 (eve — email enricher LEGO parser build) ✓, Cowork 2026-07-13 (pipeline audit + retailer casing fix) ✓, Cowork 2026-07-14 (Zapier connector verification) ✓, Cowork 2026-07-18 (eve — OAuth publish fix, invoice_files schema drift fix, first successful Agent 1B live filing) ✓, Cowork 2026-07-18 (late — manual-entry-first architecture decision + Agent 09 Purchase Planner built) ✓, Cowork 2026-07-19 (Agent 10 Buy-Side Stock Watch — framework built, Walmart proven live, 19 targets seeded from Brick Domain tier list) ✓ |
-| **Next Session** | S10 (variable-earn schema) — Agent 1B is now live-tested and working. Highest-leverage next step is Tier 2 PDF-content matching before bulk-filing the 201-email backlog (see Open Questions). Agent 09 Purchase Planner is built and ready to use for the next planned buying session, but untested against a real one yet. Agent 10 Stock Watch needs `APIFY_API_TOKEN` + `FIRECRAWL_API_KEY` added to `.env` before it can run standalone, plus real verification for target/kohls/macys/jcpenney/christianbook/amazon checkers (only walmart is proven — see agent_10_stock_watch.py docstring). |
+| **Last Updated** | 2026-07-31 |
+| **Sessions Complete** | S01 → S09 ✓, S8.5 ✓, Pre-S10 ✓, Pre-S10 Agent 1B ✓, Pre-S10 Agent 1B+1C ✓, Pre-S10 Agent 1C standalone ✓, Cowork 2026-06-20 ✓, Cowork 2026-06-21 (parts 1+2) ✓, Cowork 2026-06-22 ✓, Cowork 2026-06-26 ✓, Cowork 2026-06-28 (non-LEGO GC import into Supabase) ✓, Cowork 2026-07-05 (LEGO email parser spec + fixtures) ✓, Cowork 2026-07-05 (eve — email enricher LEGO parser build) ✓, Cowork 2026-07-13 (pipeline audit + retailer casing fix) ✓, Cowork 2026-07-14 (Zapier connector verification) ✓, Cowork 2026-07-18 (eve — OAuth publish fix, invoice_files schema drift fix, first successful Agent 1B live filing) ✓, Cowork 2026-07-18 (late — manual-entry-first architecture decision + Agent 09 Purchase Planner built) ✓, Cowork 2026-07-19 (Agent 10 Buy-Side Stock Watch — framework built, Walmart proven live, 19 targets seeded from Brick Domain tier list) ✓, Cowork 2026-07-30 (CLAUDE.md/CONTEXT.md staleness refresh) ✓, Cowork 2026-07-30→31 (Chrome extension retailer scope decided + live DOM recon on LEGO.com and Kohl's) ✓ |
+| **Next Session** | S10 (variable-earn schema) — Agent 1B is now live-tested and working. Highest-leverage next step is Tier 2 PDF-content matching before bulk-filing the 201-email backlog (see Open Questions). Agent 09 Purchase Planner is built and ready to use for the next planned buying session, but untested against a real one yet. Agent 10 Stock Watch needs `APIFY_API_TOKEN` + `FIRECRAWL_API_KEY` added to `.env` before it can run standalone, plus real verification for target/kohls/macys/jcpenney/christianbook/amazon checkers (only walmart is proven — see agent_10_stock_watch.py docstring). **Second live thread, not yet scheduled against the above:** the ResellOS Chrome Extension — recon done on LEGO.com + Kohl's (see CONTEXT.md → Planned Future Systems), Walmart/Walmart Business/Macy's still unexplored, no code written. Josh wants this built in Claude Code once he says he's ready — don't start writing extension code speculatively before that. |
 | **Phase** | P1 — Week 2 |
 | **GitHub** | theroyalcrate/ResellOS |
 
@@ -94,7 +94,10 @@ Three options already documented in `references/retailer_email_sources.md`: (a) 
 | Cowork 2026-07-05 | LEGO email parser spec + 5 real fixtures + A-007 order-confirmation correction | ✓ Complete |
 | Cowork 2026-07-05 (eve) | `agents/email_enricher.py` — LEGO parser module (908 lines). 72 tests passing. 5 code-review bugs fixed. No live Gmail run. | ✓ Complete |
 | Cowork 2026-07-18 (eve) | OAuth publish-status fix (Testing→Production, resolves 7-day token expiry). invoice_files schema drift found + fixed live via Supabase MCP (missing user_id column, wrong RLS policy). Sender-detection widened (`e.lego.com` → `lego.com` generally), committed `b4248bf`. Order T469280178 entered into Supabase. First successful Agent 1B Mode 2 filing — verified independently. Tier 2 PDF-content matching gap found (not fixed — see Open Questions). | ✓ Complete |
-| S10 | Phase 3: variable-earn schema + account_type migration (013) + Kohl's Cash block model (014). Agent 1B Modes 4/5 + Tier 2 matching + backlog bulk-file still pending. | ⏳ Next |
+| Cowork 2026-07-18 (late) → 2026-07-19 | Manual-entry-first order architecture decided. Agent 09 Purchase Planner built (migration 015). Agent 10 Buy-Side Stock Watch built (migration 016), Walmart checker proven live. See Session History for full detail. | ✓ Complete |
+| Cowork 2026-07-30 | CLAUDE.md/CONTEXT.md staleness refresh — Current Session pointer and Build State table brought current. | ✓ Complete |
+| Cowork 2026-07-30→31 | Chrome extension retailer scope decided (Walmart, Walmart Business, Macy's, Kohl's, LEGO.com). Live DOM recon on LEGO.com + Kohl's via Claude in Chrome — no code written. See Session History + CONTEXT.md → Planned Future Systems. | ✓ Complete |
+| S10 | Phase 3: variable-earn schema + account_type migration (013) + Kohl's Cash block model (014). Agent 1B Modes 4/5 + Tier 2 matching + backlog bulk-file still pending. Chrome extension build (Walmart/Walmart Business/Macy's recon + all 5 stores' content scripts) is a second live thread, not yet scheduled against this. | ⏳ Next |
 
 ---
 
@@ -117,6 +120,22 @@ Three options already documented in `references/retailer_email_sources.md`: (a) 
 ---
 
 ## Session History
+
+### Cowork 2026-07-30→31 — Chrome Extension Scope Decided + LEGO.com/Kohl's Live Recon ✓ Done — 2026-07-31
+
+**Context:** Started as a question about whether Claude's own browsing (Claude in Chrome) had gotten good enough to matter for the long-planned ResellOS Chrome extension (the "real" long-term order-capture design referenced since the manual-entry-first decision on 2026-07-18). Confirmed Claude in Chrome is live and connected (2 browsers), and that it reads the actual logged-in DOM rather than a cached page — a real upgrade over describing page structure secondhand. Josh agreed this was worth using to scope the extension for real instead of staying theoretical.
+
+**Retailer scope decided:** Walmart, Walmart Business, Macy's, Kohl's, and LEGO.com (Josh's call, 2026-07-30). Rationale: the first four have receipts/invoices that don't carry enough data for a reliable parser; LEGO.com's receipts already parse fine (Agent 1A) but Josh wants it in the extension anyway for build simplicity. Target/Best Buy not mentioned — open question whether that's deliberate. Written into CONTEXT.md → Planned Future Systems → "ResellOS Chrome Extension."
+
+**No code written this session — recon only,** done via Claude in Chrome against Josh's own logged-in sessions (following the existing authenticated-account-scraping guardrail from CONTEXT.md: his session, one page at a time, human-paced, never concurrent with him placing an order).
+
+**LEGO.com findings:** Order list (`/en-us/member/orders`) and order detail (`/en-us/member/orders/details/{orderNumber}`) use real anchor URLs. Detail page is client-rendered (needs wait-for-DOM, not read-on-load) but exposes cleanly: full delivery/billing address, **payment method with card last 4 digits** (closes the historical gift-card-linkage gap — no LEGO receipt has ever printed this), order summary totals, tracking, and line items with exact set number, quantity, and price — where a bare dash "–" instead of a price is a strong $0/GWP signal. Points History is a real per-transaction ledger but order-linkage per row wasn't confirmed.
+
+**Kohl's findings — directly relevant to S10's variable-earn schema:** The order panel (`/myaccount/purchases?orderId=...`) shows **Kohl's Cash redeemed** and **Kohl's Rewards Earned** as their own printed line items, per order, no computation needed — and its tax figure independently corroborates DECISION 018 (tax computed on the post-discount base). **Rewards Activity** (`/myaccount/rewards-activities`) is a full ledger where each earn row shows the **literal earn rate** (e.g. "5%"), dollars earned, and a "View Order Details" button linking straight back to the order. A monthly "Kohl's Cash — Rewards Issuance" entry confirms the $5-increment/30-day model, though a per-instance expiration date/certificate ID wasn't found there (check the dashboard's Kohl's Cash widget next time). **If the extension captures this page, S10's "read rewards off the invoice" plan likely becomes unnecessary for new orders** — invoice-reading still needed for historical backfill.
+
+**Not done:** Walmart, Walmart Business, Macy's recon (3 of 5 in scope). No extension code — Josh wants that built in Claude Code once recon is far enough along; this thread is intentionally not scheduled against S10/Tier 2 matching, just running in parallel. Full findings detail is in Cowork session memory (richer than what's condensed into CONTEXT.md) — redo/confirm each walkthrough live before writing content-script code rather than trusting either as a spec.
+
+---
 
 ### Cowork 2026-07-19 — Agent 10 Buy-Side Stock & Discount Watch (framework built, Walmart proven) ✓ Done — 2026-07-19
 
