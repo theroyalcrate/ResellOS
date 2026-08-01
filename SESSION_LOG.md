@@ -134,6 +134,8 @@ Three options already documented in `references/retailer_email_sources.md`: (a) 
 
 **Status:** Recon complete on all five scoped retailers. No extension code written. Full findings (richer than what's condensed into CONTEXT.md) live in Cowork session memory — redo/confirm each walkthrough live before writing content-script code. Josh confirmed he wants to move to the Claude Code build now.
 
+**Follow-up same session — Macy's card-restriction question resolved, Walmart Business reconciliation attempted and still open:** Josh corrected the Macy's recon: from direct experience, Star Rewards points accrue on **any tender**, not just the Macy's-branded card — the only real exclusion is that a gift-card-paid portion doesn't earn points. Updated in CONTEXT.md and memory. Separately, Josh asked to reconcile a specific Walmart Business order (#200015136689078, "9078") he was mid-fulfillment on. Live Charge History confirmed his numbers exactly — $822.79 temporary hold, a -$225.00 adjustment matching his manual cancellation — but also surfaced a second adjustment he hadn't mentioned (-$134.93, likely Walmart's own OOS handling). **The order was still "Ready for pickup," not yet finalized**, so none of the running totals reconciled cleanly against the pending $12.72 "2% rewards" figure shown — reported honestly as unresolved rather than forcing a fit. Needs a recheck once Josh actually picks the order up (~2026-08-01) and the Final order charge + settled reward amount post.
+
 ---
 
 ### Cowork 2026-07-30→31 — Chrome Extension Scope Decided + LEGO.com/Kohl's Live Recon ✓ Done — 2026-07-31
