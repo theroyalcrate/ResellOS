@@ -1254,6 +1254,13 @@ def mode_create_safety_filter(gmail_personal) -> None:
 # --------------------------------------------------------------------------- #
 
 def main():
+    # Windows' default console encoding (cp1252) crashes on non-ASCII characters
+    # (e.g. "→") used in several print() statements below. Reconfigure stdout to
+    # UTF-8 so any current or future Unicode output is safe, rather than patching
+    # each character individually.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     print("\n" + "=" * 70)
     print("  RESELLOS — AGENT 01B: INVOICE FILING")
     print("=" * 70)
