@@ -73,6 +73,7 @@ from googleapiclient.http import MediaIoBaseUpload
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from db_client import get_client, PHASE_1_USER_ID
+from invoice_parser import parse_invoice
 
 # Python 3.14 + Windows SSL interceptor workaround (see db_client.py get_client()
 # for the same root cause on the Supabase side). Safe for a local CLI tool.
@@ -251,6 +252,58 @@ def extract_order_number_from_subject(subject: str) -> Optional[str]:
             if len(candidate) >= 7:
                 return candidate
     return None
+
+
+def has_pdf_attachment(payload: dict) -> bool:
+    """
+    Cheap Tier 2 gate: does this message have any PDF part? No download
+    required — filenames are already present in the payload from the
+    format="full" fetch, so this never triggers an extra API call.
+    """
+    def _walk(part: dict) -> bool:
+        if (part.get("filename") or "").lower().endswith(".pdf"):
+            return True
+        return any(_walk(sub) for sub in part.get("parts", []))
+    return _walk(payload)
+
+
+def extract_order_number_from_pdf_bytes(pdf_bytes: bytes) -> Optional[str]:
+    """
+    A-007 Tier 2: extract an order number from PDF content by reusing Agent
+    1A's parser (invoice_parser.parse_invoice) rather than duplicating
+    PDF-parsing logic. Returns None (never raises) on any parse failure so a
+    malformed PDF degrades to UNMATCHED instead of crashing the filing run.
+    """
+    try:
+        invoice = parse_invoice(io.BytesIO(pdf_bytes))
+    except Exception:
+        return None
+    return invoice.order_number
+
+
+def resolve_order_number(
+    subject: str,
+    has_pdf: bool,
+    pdf_order_extractor,
+) -> tuple[Optional[str], str]:
+    """
+    A-007 matching cascade, cheap-first:
+      Tier 1 — subject-line pattern match
+      Tier 2 — PDF-content extraction (only when Tier 1 misses AND a PDF
+                attachment is present)
+    pdf_order_extractor is a zero-arg callable that performs the actual PDF
+    download + parse; kept lazy so messages that don't need Tier 2 never pay
+    for opening a PDF.
+    Returns (order_number_or_None, tier) where tier is "subject", "pdf", or "none".
+    """
+    order_number = extract_order_number_from_subject(subject)
+    if order_number:
+        return order_number, "subject"
+    if has_pdf:
+        order_number = pdf_order_extractor()
+        if order_number:
+            return order_number, "pdf"
+    return None, "none"
 
 
 def extract_sender_email(from_header: str) -> str:
@@ -636,9 +689,11 @@ def upload_pdf(drive, pdf_bytes: bytes, filename: str, folder_id: str) -> str:
 
 def match_order(order_number: str, client) -> Optional[dict]:
     """
-    A-007 Tier 1: deterministic match on order_number.
+    A-007: deterministic lookup on order_number, however it was resolved
+    (Tier 1 subject match or Tier 2 PDF-content match — see resolve_order_number).
+    Read-only by design: an order_number with no matching row returns None,
+    which the caller treats as UNMATCHED. Never inserts a stub order.
     Returns the order row (order_id, order_number, retailer, order_date) or None.
-    Tier 2 (article numbers from PDF content) is deferred to a future version.
     """
     if not order_number:
         return None
@@ -704,7 +759,7 @@ def record_filing(
 # Filing plan — pure decision-making, no file writes
 # --------------------------------------------------------------------------- #
 
-def build_filing_plan(meta: dict, client) -> dict:
+def build_filing_plan(meta: dict, client, gmail) -> dict:
     """
     Given a parsed message meta dict + Supabase client, compute the full
     filing plan: matched order, retailer folder, filename, Drive path.
@@ -713,8 +768,18 @@ def build_filing_plan(meta: dict, client) -> dict:
     msg_id       = meta["id"]
     sender_email = extract_sender_email(meta["from"])
     date_str     = extract_email_date(meta["date"])
-    order_number = extract_order_number_from_subject(meta["subject"])
-    order        = match_order(order_number, client)
+
+    def _pdf_order_extractor() -> Optional[str]:
+        for pdf in extract_pdf_attachments(gmail, msg_id, meta["payload"]):
+            candidate = extract_order_number_from_pdf_bytes(pdf["data"])
+            if candidate:
+                return candidate
+        return None
+
+    order_number, match_tier = resolve_order_number(
+        meta["subject"], has_pdf_attachment(meta["payload"]), _pdf_order_extractor
+    )
+    order = match_order(order_number, client)
 
     if order:
         retailer_key    = order["retailer"].upper().strip()
@@ -749,6 +814,7 @@ def build_filing_plan(meta: dict, client) -> dict:
         "filename":        filename,
         "folder_path":     folder_path,
         "matched":         matched,
+        "match_tier":      match_tier,
         "next_shipment":   next_shipment,
     }
 
@@ -787,11 +853,18 @@ def mode_preview(gmail, client) -> list[dict]:
             print(f"  ERROR fetching {msg_id}: {e}")
             continue
 
-        plan = build_filing_plan(meta, client)
+        plan = build_filing_plan(meta, client, gmail)
         plans.append(plan)
 
-        n          = len(plans)
-        match_info = f"order {plan['order_number']}" if plan["matched"] else "UNMATCHED"
+        n = len(plans)
+        if plan["matched"]:
+            match_info = f"order {plan['order_number']}  (tier: {plan['match_tier']})"
+        elif plan["order_number"]:
+            # Tier 1 or Tier 2 extracted a number, but no such order exists yet —
+            # surfaced so a Tier 2 misread is visible during preview, not just "UNMATCHED".
+            match_info = f"UNMATCHED  (extracted {plan['order_number']} via {plan['match_tier']}, no matching order)"
+        else:
+            match_info = "UNMATCHED"
         folder_str = "/".join(plan["folder_path"])
         print(f"  {n:>2}.  {plan['subject'][:55]}")
         print(f"        From:   {plan['sender_email']}")
@@ -802,6 +875,15 @@ def mode_preview(gmail, client) -> list[dict]:
 
     if not plans:
         print("  All queued messages have already been filed.")
+    else:
+        tier1     = sum(1 for p in plans if p["matched"] and p["match_tier"] == "subject")
+        tier2     = sum(1 for p in plans if p["matched"] and p["match_tier"] == "pdf")
+        unmatched = sum(1 for p in plans if not p["matched"])
+        print("-" * 70)
+        print(
+            f"  Summary: {len(plans)} planned | {tier1} matched via Tier 1 (subject) | "
+            f"{tier2} matched via Tier 2 (PDF content) | {unmatched} UNMATCHED"
+        )
     return plans
 
 

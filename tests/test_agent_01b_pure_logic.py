@@ -23,10 +23,14 @@ from agent_01b_invoice_filing import (
     extract_email_date,
     extract_order_number_from_subject,
     extract_sender_email,
+    has_pdf_attachment,
+    match_order,
     resolve_drive_folder_path,
+    resolve_order_number,
     resolve_retailer_folder,
     resolve_unmatched_folder_path,
 )
+from db_client import PHASE_1_USER_ID
 
 
 # --------------------------------------------------------------------------- #
@@ -279,6 +283,170 @@ def test_email_date_invalid_falls_back_to_today():
 
 def test_email_date_empty_falls_back_to_today():
     assert extract_email_date("") == date.today().isoformat()
+
+
+# --------------------------------------------------------------------------- #
+# has_pdf_attachment
+# --------------------------------------------------------------------------- #
+
+def test_has_pdf_attachment_top_level_part():
+    payload = {"filename": "T487170400_receipt.pdf", "parts": []}
+    assert has_pdf_attachment(payload) is True
+
+
+def test_has_pdf_attachment_nested_multipart():
+    payload = {
+        "filename": "",
+        "parts": [
+            {"filename": "", "parts": [
+                {"filename": "body.html"},
+                {"filename": "invoice.pdf"},
+            ]},
+        ],
+    }
+    assert has_pdf_attachment(payload) is True
+
+
+def test_has_pdf_attachment_no_pdf_present():
+    payload = {"filename": "", "parts": [{"filename": "body.html"}]}
+    assert has_pdf_attachment(payload) is False
+
+
+def test_has_pdf_attachment_case_insensitive_extension():
+    payload = {"filename": "Receipt.PDF", "parts": []}
+    assert has_pdf_attachment(payload) is True
+
+
+# --------------------------------------------------------------------------- #
+# resolve_order_number — A-007 Tier 1 / Tier 2 cascade
+# --------------------------------------------------------------------------- #
+
+def _counting_extractor(return_value):
+    """Zero-arg extractor stub that records how many times it was called."""
+    calls = {"count": 0}
+
+    def extractor():
+        calls["count"] += 1
+        return return_value
+
+    extractor.calls = calls
+    return extractor
+
+
+def test_tier1_hit_skips_tier2_entirely():
+    # Subject alone resolves the order — Tier 2 extractor must never run,
+    # even though a PDF is present, so no wasted PDF opens.
+    extractor = _counting_extractor("T487170400")
+    order_number, tier = resolve_order_number(
+        "Invoice for Order T487170400", has_pdf=True, pdf_order_extractor=extractor
+    )
+    assert (order_number, tier) == ("T487170400", "subject")
+    assert extractor.calls["count"] == 0
+
+
+def test_tier1_miss_with_pdf_falls_through_to_tier2():
+    extractor = _counting_extractor("T999888777")
+    order_number, tier = resolve_order_number(
+        "Thanks for your LEGO purchase!", has_pdf=True, pdf_order_extractor=extractor
+    )
+    assert (order_number, tier) == ("T999888777", "pdf")
+    assert extractor.calls["count"] == 1
+
+
+def test_tier1_miss_no_pdf_never_attempts_tier2():
+    extractor = _counting_extractor("SHOULD_NOT_BE_USED")
+    order_number, tier = resolve_order_number(
+        "Thanks for your LEGO purchase!", has_pdf=False, pdf_order_extractor=extractor
+    )
+    assert (order_number, tier) == (None, "none")
+    assert extractor.calls["count"] == 0
+
+
+def test_tier2_extractor_finds_no_order_number_in_pdf():
+    # PDF present, Tier 1 misses, but the PDF itself has no extractable order number.
+    extractor = _counting_extractor(None)
+    order_number, tier = resolve_order_number(
+        "Thanks for your LEGO purchase!", has_pdf=True, pdf_order_extractor=extractor
+    )
+    assert (order_number, tier) == (None, "none")
+    assert extractor.calls["count"] == 1
+
+
+# --------------------------------------------------------------------------- #
+# match_order — read-only lookup, no stub-order creation (Tier 2 safety)
+# --------------------------------------------------------------------------- #
+
+class _FakeQueryResult:
+    def __init__(self, data):
+        self.data = data
+
+
+class _FakeOrdersQuery:
+    """Minimal chainable stand-in for the Supabase query builder, filtering
+    an in-memory list of order rows. SELECT-only — no insert/update/delete
+    methods exist, so a Tier 2 match accidentally creating a stub order
+    would raise AttributeError instead of silently succeeding."""
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    def select(self, *_args, **_kwargs):
+        return self
+
+    def eq(self, field, value):
+        return _FakeOrdersQuery([r for r in self._rows if r.get(field) == value])
+
+    def execute(self):
+        return _FakeQueryResult(self._rows)
+
+
+class _FakeSupabaseClient:
+    def __init__(self, orders):
+        self._orders = orders
+
+    def table(self, name):
+        assert name == "orders", f"unexpected table access in pure-logic test: {name}"
+        return _FakeOrdersQuery(self._orders)
+
+
+def test_match_order_found():
+    client = _FakeSupabaseClient([
+        {"order_id": "abc-123", "order_number": "T487170400",
+         "user_id": PHASE_1_USER_ID, "retailer": "LEGO", "order_date": "2025-12-03"},
+    ])
+    result = match_order("T487170400", client)
+    assert result == {
+        "order_id": "abc-123", "order_number": "T487170400",
+        "user_id": PHASE_1_USER_ID, "retailer": "LEGO", "order_date": "2025-12-03",
+    }
+
+
+def test_match_order_tier2_number_with_no_matching_row_returns_none():
+    # Simulates a Tier 2 PDF extraction that yields a real-looking order
+    # number with no corresponding row in `orders` — must resolve to None
+    # (caller treats this as UNMATCHED) rather than raising or inserting.
+    client = _FakeSupabaseClient([
+        {"order_id": "abc-123", "order_number": "T487170400",
+         "user_id": PHASE_1_USER_ID, "retailer": "LEGO", "order_date": "2025-12-03"},
+    ])
+    result = match_order("T000000000", client)
+    assert result is None
+
+
+class _ExplodingClient:
+    """Raises if anything touches .table() — proves match_order short-circuits
+    on a falsy order_number instead of firing a query with no filter value."""
+
+    def table(self, name):
+        raise AssertionError("match_order should not query when order_number is falsy")
+
+
+def test_match_order_none_order_number_returns_none_without_querying():
+    assert match_order(None, _ExplodingClient()) is None
+
+
+def test_match_order_empty_string_order_number_returns_none_without_querying():
+    assert match_order("", _ExplodingClient()) is None
 
 
 # --------------------------------------------------------------------------- #

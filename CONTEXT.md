@@ -243,6 +243,8 @@ Implementation requirements: review queue (confidence score + candidate cluster)
 
 Full detail: ResellOS-Knowledge vault at Areas/business-logic/email-order-matching.md.
 
+**Agent 1B implementation status (updated 2026-08-17):** Agent 1B's own matching cascade (`agents/agent_01b_invoice_filing.py`, `resolve_order_number()`) now has two concrete tiers, cheap-first: Tier 1 is subject-line order-number extraction; Tier 2 (built 2026-08-17) runs only when Tier 1 misses and the email carries a PDF attachment — it reuses Agent 1A's `invoice_parser.parse_invoice()` to read the order number out of the PDF content, closing the gap where LEGO's "Receipt" email type (`no-reply-billing03@lego.com`) has no order number in its subject. Both tiers feed the same read-only `match_order()` lookup — an extracted number with no matching `orders` row is UNMATCHED, same as today; neither tier ever creates a stub order. A live preview run the same day against the full ResellOS-Invoices queue (1,032 messages, far larger than the ~201 previously estimated) found Tier 2 lifts order-number *extraction* coverage from ~8.5% to ~86% of the queue, but only 15 of those 891 extracted numbers (1.7%) matched an existing Supabase order — the remaining ~876 are real-looking order numbers with no corresponding row yet. That gap is a missing-order-data problem, not a matching-logic problem — most of this queue is for orders never manually entered into Supabase. See SESSION_LOG.md's 2026-08-17 entry for full detail.
+
 ---
 
 ## Planned Future Systems (Not Yet Built)
