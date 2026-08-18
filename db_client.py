@@ -42,8 +42,15 @@ def get_client() -> Client:
     return client
 
 
-# Phase 1: hardcoded single user UUID per DECISION 012
-PHASE_1_USER_ID = "00000000-0000-0000-0000-000000000001"
+# Phase 1: hardcoded single user UUID per DECISION 012.
+# Re-pointed 2026-08-12 (migration 018) to Josh's real Supabase Auth user ID,
+# created as the Chrome extension's auth prerequisite. All existing data (9
+# orders, 216 gift cards, etc.) was migrated to this same ID that same session
+# -- backend scripts still use the secret key (RLS bypass) and this constant,
+# not a real login, but now they share one identity with the extension instead
+# of two. Still "Phase 1" in the sense that there's no per-request auth context
+# yet -- true Phase 2 (scripts authenticate as this real user) is unchanged/future.
+PHASE_1_USER_ID = "9f9f2ad3-d889-4c5e-a057-73ea0ddc93b4"
 
 
 if __name__ == "__main__":
