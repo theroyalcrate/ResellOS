@@ -48,6 +48,7 @@ _RETAILER_ALIASES = {
     "KOHLS": "kohls", "KOHL'S": "kohls",
     "MACYS": "macys", "MACY'S": "macys",
     "WALMART": "walmart",
+    "WALMART_BUSINESS": "walmart_business", "WALMART BUSINESS": "walmart_business",
     "TARGET": "target",
     "BESTBUY": "best_buy", "BEST BUY": "best_buy", "BEST_BUY": "best_buy",
 }
