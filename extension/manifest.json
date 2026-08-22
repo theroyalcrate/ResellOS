@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "ResellOS Capture — LEGO",
+  "version": "0.1.0",
+  "description": "Captures LEGO.com order-detail pages into ResellOS's capture_queue for review. Never writes to orders/line_items directly.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.lego.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ResellOS Capture"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.lego.com/*/member/orders/details/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

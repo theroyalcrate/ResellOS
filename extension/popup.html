@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>ResellOS Capture</title>
+  <style>
+    body {
+      width: 260px;
+      font-family: system-ui, -apple-system, sans-serif;
+      padding: 14px;
+      color: #1a1a1a;
+    }
+    h1 {
+      font-size: 14px;
+      margin: 0 0 10px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      margin-bottom: 3px;
+      color: #444;
+    }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px 8px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    button {
+      width: 100%;
+      padding: 7px 8px;
+      border: none;
+      border-radius: 4px;
+      background: #1a5;
+      color: white;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #eee;
+      color: #333;
+      margin-top: 6px;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    #message {
+      font-size: 12px;
+      margin-top: 8px;
+      min-height: 14px;
+    }
+    #message.error { color: #c22; }
+    #message.ok { color: #1a5; }
+    #loggedInView { display: none; }
+    #loggedInView p { font-size: 12px; word-break: break-all; }
+    a#forgotLink {
+      display: inline-block;
+      font-size: 11px;
+      margin-top: 4px;
+      color: #666;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>ResellOS Capture — LEGO</h1>
+
+  <div id="loginView">
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="username" />
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" />
+    <button id="loginBtn">Log in</button>
+    <a id="forgotLink">Forgot password?</a>
+  </div>
+
+  <div id="loggedInView">
+    <p>Logged in as <strong id="loggedInEmail"></strong></p>
+    <button id="logoutBtn" class="secondary">Log out</button>
+  </div>
+
+  <div id="message"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
