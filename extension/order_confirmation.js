@@ -11,32 +11,44 @@
 // already-promoted "checkout" order instead of creating a duplicate.
 //
 // What this page has that order-details doesn't: Insiders points broken
-// out per line item (plus the order total), and payment tenders shown as
-// itemized dollar deductions ("Gift Card -$116.20") rather than just
-// masked last-4s. What it's missing that order-details has: no card
-// last4s at all, no tracking numbers (order hasn't shipped yet), and GWP
-// items show name-only (no set number, no points line) -- order-details
-// remains the authoritative source for full line-item/GWP/tracking detail.
+// out per line item (plus the order total), payment tenders shown as
+// itemized dollar deductions ("Gift Card -$116.20"), and -- confirmed live
+// 2026-08-26 on T513381170 -- a card's last4 named directly under a
+// "Payment Method" heading, separate from the itemized deductions. What's
+// still missing here that order-details has: gift card last4s (LEGO never
+// shows the per-gift-card split on either page, only order-details shows
+// each card's own last4), no tracking numbers (order hasn't shipped yet),
+// and GWP items show name-only (no set number, no points line) --
+// order-details remains the authoritative source for full
+// gift-card-identity/GWP/tracking detail.
 //
 // Fixed 2026-08-26: "Order Total" is not the order's total value -- it's
 // the balance still owed after gift-card deductions, which reads $0.00 on
 // any order fully paid by gift card (confirmed live on T513380643). The
 // real total is now computed as subtotal + tax and kept as `total`; the
 // raw LEGO field is kept separately as `balance_due`. When balance_due is
-// still positive after itemized tenders, a card must have covered the
-// rest -- LEGO doesn't appear to itemize card charges as a deduction line
-// the way it does gift cards, so that remainder is added as an inferred
-// card tender (payment_methods entry with inferred: true).
+// still positive after itemized gift-card deductions, a card must have
+// covered the rest -- LEGO doesn't itemize card charges as a deduction
+// line the way it does gift cards, so that remainder is added as an
+// inferred card tender (payment_methods entry with inferred: true). Also
+// confirmed live 2026-08-26 on T513381170 (a real card-paid order, card
+// ...3013, balance_due $0.66 exactly matching the card charge): the
+// card's last4 is readable directly and now attached to that inferred
+// entry -- only its dollar amount stays flagged inferred, since it's
+// still not an itemized line.
 //
-// NOT verified live: a second tender type (only one gift card on the test
-// order -- Josh confirmed multi-gift-card orders show one "Gift Card -$X"
-// line per card here, but that's not directly observed by this script
-// yet), an actual card payment (the inferred-tender logic above is
-// untested against a real card-paid order -- watch for the
-// "inferred: true" flag on the next one and confirm the amount against
-// the card statement), and whether this URL is reachable again for an
-// order placed in an earlier session. Watch the console ("[ResellOS]"
-// prefix) on the first captures of those cases.
+// Fixed 2026-08-26: an item on sale shows both "Price $X.XX" (list) and
+// "Sale Price $Y.YY" (what's actually charged) -- confirmed live on
+// T513381170 (Mirabel Key Chain). unit_price now prefers the sale price
+// when present; the list price is kept separately as list_price.
+//
+// NOT verified live: a second gift card tender on this page (only ever
+// seen one gift card line across the orders checked so far -- content.js
+// confirms multi-gift-card orders exist, just not observed here yet), a
+// branded card name/type (only last4 is shown, no "VISA"/"Mastercard"
+// text observed), and whether this URL is reachable again for an order
+// placed in an earlier session. Watch the console ("[ResellOS]" prefix)
+// on the first captures of those cases.
 
 const BUTTON_ID = "resellos-capture-confirmation-btn";
 const LOG_PREFIX = "[ResellOS]";
@@ -128,6 +140,17 @@ function extractTotals() {
   return { subtotal, tax, total, balance_due: balanceDue };
 }
 
+// Card last4 shown under a "Payment Method" heading near the top of the
+// page (confirmed live on T513381170: "Payment Method\n**** 3013"), separate
+// from the itemized "Order Summary" deductions -- gift cards show there as
+// "-$X" lines, but a card is only ever named here, as a masked number, with
+// no dollar amount attached. No brand text observed live yet.
+function extractPaymentMethodCardLast4() {
+  const body = document.body.innerText || "";
+  const match = body.match(/Payment Method\s*\n\s*\**\s*(\d{4})\b/i);
+  return match ? match[1] : null;
+}
+
 function extractPointsEarned() {
   const body = document.body.innerText || "";
   const match = body.match(/You will earn\s*\n\s*(\d+)\s*\n\s*points on this purchase/i);
@@ -189,14 +212,34 @@ function extractLineItemsWithPoints() {
   // Paid items: description line, then "Item: {number}" -- confirmed live
   // the name always renders on its own line right before "Item:", same
   // reading-order assumption content.js makes for the order-details page.
-  const itemRegex = /([^\n]+)\nItem:\s*(\S+)\s*\nInsiders Points on this order:\s*(\d+)\s*\nPrice[\s\S]*?\$(\d+(?:\.\d{1,2})?)[\s\S]*?\nQty:\s*(\d+)/gi;
+  // Fixed 2026-08-26: an item on sale shows BOTH "Price $X.XX" (list) and
+  // "Sale Price $Y.YY" (what's actually charged) inside the same block --
+  // confirmed live on T513381170 (Mirabel Key Chain: Price $5.99, Sale
+  // Price $3.59, subtotal only adds up with $3.59). The old regex always
+  // grabbed the first dollar amount after "Price", which is the list
+  // price, silently overstating unit_price on any sale item. Now captures
+  // the whole block between the points line and "Qty:", then prefers
+  // "Sale Price" over "Price" within it.
+  const itemBlockRegex = /([^\n]+)\nItem:\s*(\S+)\s*\nInsiders Points on this order:\s*(\d+)\s*\n([\s\S]*?)\nQty:\s*(\d+)/gi;
   let match;
-  while ((match = itemRegex.exec(section)) !== null) {
+  while ((match = itemBlockRegex.exec(section)) !== null) {
+    const priceBlock = match[4];
+    const listPriceMatch = priceBlock.match(/^Price\s*\$(\d+(?:\.\d{1,2})?)/im);
+    const salePriceMatch = priceBlock.match(/Sale Price\s*\$(\d+(?:\.\d{1,2})?)/i);
+    const unitPrice = salePriceMatch
+      ? parseFloat(salePriceMatch[1])
+      : listPriceMatch
+      ? parseFloat(listPriceMatch[1])
+      : null;
+    if (unitPrice == null) {
+      warn(`Could not find a price for "${match[1].trim()}" -- skipping unit_price.`);
+    }
     items.push({
       description: match[1].trim(),
       set_number: match[2],
       points_earned: parseInt(match[3], 10),
-      unit_price: parseFloat(match[4]),
+      unit_price: unitPrice,
+      list_price: listPriceMatch ? parseFloat(listPriceMatch[1]) : null,
       quantity: parseInt(match[5], 10),
       is_gwp: false,
     });
@@ -241,13 +284,23 @@ function buildRawData() {
   // balance_due rather than read directly, and flagged inferred: true so
   // it's obvious at review time in capture_queue_promotion.py.
   if (totals.balance_due != null && totals.balance_due > 0.01) {
+    // Confirmed live 2026-08-26 on T513381170 (subtotal $103.58 + tax
+    // $11.08 = $114.66, one $114.00 gift card, "Order Total" $0.66,
+    // "Payment Method" showed card **** 3013): the leftover balance really
+    // is what got charged to the card named under "Payment Method". last4
+    // is read directly off the page when present; the dollar amount still
+    // isn't an itemized line here (LEGO doesn't show "Visa -$0.66" the way
+    // it shows "Gift Card -$114.00"), so it's derived from balance_due and
+    // kept flagged inferred: true for review either way.
+    const cardLast4 = extractPaymentMethodCardLast4();
     paymentMethods.push({
       type: "card",
-      label: "Card (inferred from balance due)",
+      label: cardLast4 ? `Card ...${cardLast4}` : "Card (inferred from balance due)",
+      last4: cardLast4,
       amount: totals.balance_due,
       inferred: true,
     });
-    warn(`Order Total showed a balance due of $${totals.balance_due} -- added an inferred card tender for that amount, verify at review.`);
+    warn(`Order Total showed a balance due of $${totals.balance_due}${cardLast4 ? ` -- matched to card ...${cardLast4}` : ""}, verify at review.`);
   }
 
   log("Extracted (checkout stage):", { orderNumber, totals, pointsEarned, paymentMethods, lineItems });

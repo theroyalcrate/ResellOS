@@ -407,19 +407,27 @@ def promote(client, row):
             if pm.get("amount") is not None:
                 # checkout-stage: dollar amount already known from the
                 # confirmation page, last4 comes later via a shipped-stage
-                # merge -- nothing to ask Josh here.
+                # merge (or, for a card, may already be known -- see below)
+                # -- nothing to ask Josh here either way.
                 label = pm.get("label") or pm.get("type") or "tender"
+                last4 = pm.get("last4")
+                # added 2026-08-26: order_confirmation.js's "Payment Method"
+                # section names a card's last4 directly, even for a checkout
+                # capture -- confirmed live on T513381170. Only gift cards
+                # stay identity-unknown at this stage.
+                identity = f" (...{last4})" if last4 else " (card identity not yet known)"
                 if pm.get("inferred"):
-                    # added 2026-08-26: order_confirmation.js infers a card
-                    # tender from LEGO's "Order Total" balance-due field
+                    # order_confirmation.js infers a card tender's DOLLAR
+                    # AMOUNT from LEGO's "Order Total" balance-due field
                     # when itemized gift-card deductions don't cover the
-                    # full total. Not read directly off the page -- flag it
-                    # so Josh checks it against the actual card statement.
+                    # full total -- not an itemized line the way gift cards
+                    # are, so flag it even when last4 is known, so Josh
+                    # checks the amount against the actual card statement.
                     tender_notes.append(
-                        f"{label}: ${pm.get('amount')} [INFERRED, not read from page -- verify against card statement]"
+                        f"{label}: ${pm.get('amount')}{identity} [amount INFERRED from balance due, not an itemized line -- verify against card statement]"
                     )
                 else:
-                    tender_notes.append(f"{label}: ${pm.get('amount')} (card identity not yet known)")
+                    tender_notes.append(f"{label}: ${pm.get('amount')}{identity}")
             elif pm.get("type") == "gift_card":
                 amount = get_input(f"    Gift card ...{pm.get('last4')} -- amount applied (blank if unknown)", required=False)
                 tender_notes.append(f"GC ...{pm.get('last4')}: ${amount}" if amount else f"GC ...{pm.get('last4')}: amount unknown")
