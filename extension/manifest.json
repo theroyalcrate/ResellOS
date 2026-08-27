@@ -17,6 +17,11 @@
       "matches": ["https://www.lego.com/*/member/orders/details/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.lego.com/*/page/static/order-confirmation/*"],
+      "js": ["order_confirmation.js"],
+      "run_at": "document_idle"
     }
   ]
 }

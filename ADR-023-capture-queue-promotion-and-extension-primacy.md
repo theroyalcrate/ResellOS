@@ -45,6 +45,7 @@ Every writer into `capture_queue` (extension content scripts, Agent 1D) must sha
 ```json
 {
   "source": "chrome_extension" | "agent_1d_pdf_backfill",
+  "capture_stage": "checkout" | "shipped",
   "retailer": "lego" | "kohls" | "walmart" | "walmart_business" | "macys",
   "order_number": "string",
   "order_date": "YYYY-MM-DD",
@@ -62,11 +63,48 @@ Every writer into `capture_queue` (extension content scripts, Agent 1D) must sha
   "tax": "number | null",
   "total": "number",
   "rewards_earned": "number | null",
-  "gift_card_last4": "string | null"
+  "gift_card_last4": "string | null",
+  "payment_methods": [
+    {
+      "type": "gift_card | card | unknown",
+      "last4": "string (gift_card, card)",
+      "brand": "string (card only)",
+      "raw": "string (unknown only)"
+    }
+  ],
+  "shipments": [
+    {
+      "tracking_number": "string",
+      "status": "string | null",
+      "set_numbers": ["string"]
+    }
+  ]
 }
 ```
 
-`gift_card_last4` — the extension may fill this when visible on the order-detail page (confirmed present on LEGO's page per recon); Agent 1D leaves this null always — PDFs never print it.
+**`shipments` — added 2026-08-27**, verified live against T513203884 (one shipment,
+5 items) and T513202830 (two shipments -- one with an item + a GWP, the other with
+a lone GWP). Extracted from the order-detail page's "Order overview" section, which
+repeats a `{status}\nTracking number: {value}\n...items...` block once per shipment.
+`set_numbers` is the list of `Item:` values found between this shipment's tracking
+line and the next (or end of page) -- used at promotion time to create one `shipments`
+row per tracking number and set each matching `line_items.shipment_id`, instead of the
+single blank placeholder shipment promotion wrote before this. Empty list when the
+order hasn't shipped yet (no "Tracking number:" text present) -- promotion falls back
+to the old single-blank-placeholder behavior in that case, so nothing regresses for
+orders captured pre-shipment.
+
+`gift_card_last4` — **deprecated 2026-08-27, kept for backward compat only.** Derived as the first gift card found in `payment_methods` below; the extension may fill this when visible on the order-detail page (confirmed present on LEGO's page per recon); Agent 1D leaves this null always — PDFs never print it.
+
+`payment_methods` — **added 2026-08-27**, verified live against three real orders, all multi-gift-card (T513203884: one card; T513207318 and T513202830: two cards each). Replaces `gift_card_last4` as the authoritative field: an order can carry several gift cards plus a credit card (Josh: "there are some orders that have 3 gift cards listed and a credit card"), and the order-details page never shows the dollar split across them, so `capture_queue_promotion.py` prompts Josh per tender at review time when only a `last4` is known. Branded-card detection (`type: "card"`) is written from an earlier confirmed format ("VISA ••••3013") but not verified live this session — none of the three test orders paid with a card.
+
+`capture_stage` — **added 2026-08-27**, distinguishes which page a capture came from, since the two pages expose different, complementary data and neither alone is complete:
+
+- **`"checkout"`** — `order_confirmation.js`, the `lego.com/.../page/static/order-confirmation/{orderNumber}` page shown right after purchase. Verified live against T513379536. Has Insiders points per line item and in total (`rewards_earned` is a real number here, not always null), and payment tenders as itemized dollar amounts (`payment_methods[].amount`, no `last4` — the confirmation page never shows card identity). GWP items on this page are name-only (no set number). `shipments` is always `[]` (order hasn't shipped yet). Not confirmed live: whether this URL stays reachable for an order from an earlier session, or how a second tender type (e.g. a branded card) renders here.
+- **`"shipped"`** — `content.js`, the order-details page, unchanged from the description above. Has tracking numbers and card `last4`s, never amounts.
+- Legacy captures written before this field existed have no `capture_stage` key; `capture_queue_promotion.py` treats a missing value as `"shipped"` (the only path that existed before 2026-08-27).
+
+**Promotion behavior:** a `"checkout"` capture for a new order number promotes normally (creates the order — this is now the primary create path when both stages are used, since it has the real Insiders points). A `"shipped"` capture for an order number that's *already* promoted is merged into the existing order (tracking + payment identity notes only, via `_merge_shipped_capture` in `capture_queue_promotion.py`) instead of creating a duplicate order. A `"checkout"` capture for an order number that's already promoted is flagged as a likely duplicate and offered for discard.
 
 Writers also populate the top-level `order_number` / `order_date` / `total` columns (not just inside `raw_data`) so the review list can be queried without parsing JSON.
 

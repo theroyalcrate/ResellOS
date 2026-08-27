@@ -129,10 +129,103 @@ function extractLabeledAmount(label) {
   return null;
 }
 
-function extractCardLast4() {
+function extractPaymentMethods() {
+  // Replaces the old single-match extractCardLast4() (2026-08-27) -- that
+  // version used body.match() (first hit only), which silently dropped
+  // every card past the first on any order paying with more than one.
+  // Confirmed live this session on three real orders, all multi-gift-card:
+  // T513203884 (one card, "••••7267"), T513207318 (two,
+  // "••••7267" / "••••7275"), T513202830 (two, "••••7259" / "••••7267").
+  // Each tender renders as its own line under a "Payment method" heading,
+  // ending right before the next section's "Delivery method" heading.
+  // Josh confirmed orders exist with three gift cards plus a credit card,
+  // so this scopes to that section and returns every line, not just the
+  // first.
+  //
+  // NOT verified live: a branded-card line. Written from the 2026-08-21
+  // recon note's confirmed "VISA ••••3013" format (a brand word before the
+  // dots) -- none of this session's three test orders paid with a card, so
+  // watch the console ("Unrecognized payment method line") on the first
+  // real capture of a card-paid order and fix the regex if the real format
+  // differs.
   const body = document.body.innerText || "";
-  const match = body.match(/(?:ending in|ending\s)\D{0,10}(\d{4})\b/i) || body.match(/•{2,}\s*(\d{4})\b/);
-  return match ? match[1] : null;
+  const section = body.match(/Payment method\s*\n([\s\S]*?)\n\s*Delivery method/i);
+  if (!section) {
+    warn('Could not find a "Payment method" section on the page.');
+    return [];
+  }
+
+  const lines = section[1]
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  return lines.map((line) => {
+    const branded = line.match(/^([A-Za-z]+)\s*•{2,}\s*(\d{4})$/);
+    if (branded) {
+      return { type: "card", brand: branded[1], last4: branded[2] };
+    }
+    const giftCard = line.match(/•{2,}\s*(\d{4})$/);
+    if (giftCard) {
+      return { type: "gift_card", last4: giftCard[1] };
+    }
+    warn(`Unrecognized payment method line: "${line}"`);
+    return { type: "unknown", raw: line };
+  });
+}
+
+function extractShipments() {
+  // Confirmed live 2026-08-27 against two real orders: T513203884 (single
+  // shipment) and T513202830 (two shipments, one carrying two items
+  // including a GWP, the other carrying one GWP alone). The "Order
+  // overview" section repeats this block once per shipment, in DOM/reading
+  // order: a status word ("Shipped"), then "Tracking number: {value}",
+  // then "Track package" / "Visit carrier tracking page" links, then the
+  // item rows belonging to that shipment (same "Item: {number}" markers
+  // extractLineItems() already scans for). Working off body.innerText
+  // (not DOM traversal) so this survives LEGO's per-build class hashes,
+  // same reasoning as extractCardLast4/extractOrderDate above.
+  //
+  // NOT verified live: an order still in "Processing" (no tracking number
+  // yet -- should just return [] below, same as an order that hasn't
+  // shipped), or a status word other than "Shipped" (e.g. "Delivered").
+  // Watch the console on the first captures of those cases.
+  const body = document.body.innerText || "";
+  const trackingRegex = /Tracking number:\s*(\S+)/g;
+  const matches = [...body.matchAll(trackingRegex)];
+
+  if (matches.length === 0) {
+    log('No "Tracking number:" text found -- order may not have shipped yet.');
+    return [];
+  }
+
+  const shipments = [];
+  for (let i = 0; i < matches.length; i++) {
+    const match = matches[i];
+    const trackingNumber = match[1];
+    const segmentStart = match.index + match[0].length;
+    const segmentEnd = i + 1 < matches.length ? matches[i + 1].index : body.length;
+    const segment = body.slice(segmentStart, segmentEnd);
+
+    const setNumbers = [...segment.matchAll(/Item:\s*(\S+)/gi)].map((m) => m[1]);
+
+    // The status word ("Shipped") sits on its own line immediately before
+    // "Tracking number:" -- confirmed live on both test orders.
+    const before = body.slice(0, match.index);
+    const statusMatch = before.match(/([A-Za-z][A-Za-z ]*)\s*$/);
+    const status = statusMatch ? statusMatch[1].trim() : null;
+
+    if (setNumbers.length === 0) {
+      warn(`Tracking number ${trackingNumber} found but no "Item:" markers matched to it -- verify live.`);
+    }
+
+    shipments.push({
+      tracking_number: trackingNumber,
+      status: status || null,
+      set_numbers: setNumbers,
+    });
+  }
+  return shipments;
 }
 
 function isItemMarker(el) {
@@ -255,12 +348,20 @@ function buildRawData() {
   const subtotal = extractLabeledAmount("Subtotal");
   const tax = extractLabeledAmount("Tax");
   const total = extractLabeledAmount("Total") ?? extractLabeledAmount("Order total");
-  const gwpCardLast4 = extractCardLast4();
+  const paymentMethods = extractPaymentMethods();
+  const shipments = extractShipments();
 
-  log("Extracted:", { orderNumber, orderDate, subtotal, tax, total, gwpCardLast4, lineItems });
+  // gift_card_last4 kept for backward compat with anything reading the old
+  // single-card field -- first gift card found, same as the old behavior's
+  // best case. payment_methods below is the authoritative, complete list.
+  const firstGiftCard = paymentMethods.find((p) => p.type === "gift_card");
+  const gwpCardLast4 = firstGiftCard ? firstGiftCard.last4 : null;
+
+  log("Extracted:", { orderNumber, orderDate, subtotal, tax, total, paymentMethods, lineItems, shipments });
 
   return {
     source: "chrome_extension",
+    capture_stage: "shipped", // this page (order-details) is visited after the order ships -- see order_confirmation.js for the "checkout" stage and capture_queue_promotion.py for how the two get merged
     retailer: "lego",
     order_number: orderNumber,
     order_date: orderDate,
@@ -268,8 +369,10 @@ function buildRawData() {
     subtotal,
     tax,
     total,
-    rewards_earned: null, // Points History is a separate page -- out of scope this session per ADR-023 sequencing.
-    gift_card_last4: gwpCardLast4,
+    rewards_earned: null, // Points History is a separate page -- out of scope this session per ADR-023 sequencing. order_confirmation.js captures this at checkout instead.
+    gift_card_last4: gwpCardLast4, // deprecated, kept for backward compat -- see payment_methods
+    payment_methods: paymentMethods, // every tender on the order: [{type:"gift_card",last4} | {type:"card",brand,last4} | {type:"unknown",raw}]
+    shipments, // [] if the order hasn't shipped yet -- see extractShipments().
   };
 }
 
