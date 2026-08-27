@@ -414,8 +414,15 @@ def promote(client, row):
                 # added 2026-08-26: order_confirmation.js's "Payment Method"
                 # section names a card's last4 directly, even for a checkout
                 # capture -- confirmed live on T513381170. Only gift cards
-                # stay identity-unknown at this stage.
-                identity = f" (...{last4})" if last4 else " (card identity not yet known)"
+                # stay identity-unknown at this stage. label already reads
+                # "Card ...{last4}" for that case, so skip re-appending it
+                # here (Claude Code caught this duplication on ac62578).
+                if last4 and last4 in label:
+                    identity = ""
+                elif last4:
+                    identity = f" (...{last4})"
+                else:
+                    identity = " (card identity not yet known)"
                 if pm.get("inferred"):
                     # order_confirmation.js infers a card tender's DOLLAR
                     # AMOUNT from LEGO's "Order Total" balance-due field
