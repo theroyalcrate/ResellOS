@@ -62,14 +62,17 @@ Every writer into `capture_queue` (extension content scripts, Agent 1D) must sha
   "subtotal": "number | null",
   "tax": "number | null",
   "total": "number",
+  "balance_due": "number | null",
   "rewards_earned": "number | null",
   "gift_card_last4": "string | null",
   "payment_methods": [
     {
       "type": "gift_card | card | unknown",
-      "last4": "string (gift_card, card)",
+      "last4": "string (gift_card, card; shipped stage)",
       "brand": "string (card only)",
-      "raw": "string (unknown only)"
+      "raw": "string (unknown only)",
+      "amount": "number (checkout stage only)",
+      "inferred": "bool (checkout stage only, added 2026-08-26 -- true when computed from balance_due rather than read directly off the page)"
     }
   ],
   "shipments": [
@@ -93,6 +96,8 @@ single blank placeholder shipment promotion wrote before this. Empty list when t
 order hasn't shipped yet (no "Tracking number:" text present) -- promotion falls back
 to the old single-blank-placeholder behavior in that case, so nothing regresses for
 orders captured pre-shipment.
+
+`total` / `balance_due` — **fixed 2026-08-26.** `total` is now always computed as `subtotal + tax` (the order's real economic value), never read directly off the page. Before this fix, `order_confirmation.js` wrote whatever LEGO's page labels "Order Total" straight into `total` -- but that field is actually the *remaining balance still to be charged to a card*, which reads `$0.00` on any order paid off entirely by gift card (caught live on T513380643: subtotal $102.96 + tax $11.02 = $113.98, fully covered by two gift card deductions, `total` had been landing as `0`). That raw LEGO value is kept separately as `balance_due` -- normally `0` once `payment_methods` fully covers `total`. When `balance_due` is still positive after itemized gift-card deductions, the extension infers a card must have covered the rest (LEGO doesn't itemize card charges as a deduction line the way it does gift cards) and adds a synthetic `payment_methods` entry for that amount with `inferred: true` -- not read from the page, unverified against a real card-paid order, flagged in `capture_queue_promotion.py`'s review prompt so Josh checks it against the card statement before confirming. `content.js` (shipped stage) is unaffected -- it never wrote a `total` from this buggy field.
 
 `gift_card_last4` — **deprecated 2026-08-27, kept for backward compat only.** Derived as the first gift card found in `payment_methods` below; the extension may fill this when visible on the order-detail page (confirmed present on LEGO's page per recon); Agent 1D leaves this null always — PDFs never print it.
 

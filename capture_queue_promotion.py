@@ -409,7 +409,17 @@ def promote(client, row):
                 # confirmation page, last4 comes later via a shipped-stage
                 # merge -- nothing to ask Josh here.
                 label = pm.get("label") or pm.get("type") or "tender"
-                tender_notes.append(f"{label}: ${pm.get('amount')} (card identity not yet known)")
+                if pm.get("inferred"):
+                    # added 2026-08-26: order_confirmation.js infers a card
+                    # tender from LEGO's "Order Total" balance-due field
+                    # when itemized gift-card deductions don't cover the
+                    # full total. Not read directly off the page -- flag it
+                    # so Josh checks it against the actual card statement.
+                    tender_notes.append(
+                        f"{label}: ${pm.get('amount')} [INFERRED, not read from page -- verify against card statement]"
+                    )
+                else:
+                    tender_notes.append(f"{label}: ${pm.get('amount')} (card identity not yet known)")
             elif pm.get("type") == "gift_card":
                 amount = get_input(f"    Gift card ...{pm.get('last4')} -- amount applied (blank if unknown)", required=False)
                 tender_notes.append(f"GC ...{pm.get('last4')}: ${amount}" if amount else f"GC ...{pm.get('last4')}: amount unknown")

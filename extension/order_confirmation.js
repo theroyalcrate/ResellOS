@@ -18,12 +18,25 @@
 // items show name-only (no set number, no points line) -- order-details
 // remains the authoritative source for full line-item/GWP/tracking detail.
 //
+// Fixed 2026-08-26: "Order Total" is not the order's total value -- it's
+// the balance still owed after gift-card deductions, which reads $0.00 on
+// any order fully paid by gift card (confirmed live on T513380643). The
+// real total is now computed as subtotal + tax and kept as `total`; the
+// raw LEGO field is kept separately as `balance_due`. When balance_due is
+// still positive after itemized tenders, a card must have covered the
+// rest -- LEGO doesn't appear to itemize card charges as a deduction line
+// the way it does gift cards, so that remainder is added as an inferred
+// card tender (payment_methods entry with inferred: true).
+//
 // NOT verified live: a second tender type (only one gift card on the test
 // order -- Josh confirmed multi-gift-card orders show one "Gift Card -$X"
 // line per card here, but that's not directly observed by this script
-// yet), a branded-card deduction line (e.g. "Visa -$X"), and whether this
-// URL is reachable again for an order placed in an earlier session. Watch
-// the console ("[ResellOS]" prefix) on the first captures of those cases.
+// yet), an actual card payment (the inferred-tender logic above is
+// untested against a real card-paid order -- watch for the
+// "inferred: true" flag on the next one and confirm the amount against
+// the card statement), and whether this URL is reachable again for an
+// order placed in an earlier session. Watch the console ("[ResellOS]"
+// prefix) on the first captures of those cases.
 
 const BUTTON_ID = "resellos-capture-confirmation-btn";
 const LOG_PREFIX = "[ResellOS]";
@@ -98,11 +111,21 @@ function valueAfterLabel(body, labelRegex) {
 
 function extractTotals() {
   const body = document.body.innerText || "";
-  return {
-    subtotal: parseMoney(valueAfterLabel(body, /^\d+\s+items?$/i)),
-    tax: parseMoney(valueAfterLabel(body, /^TAX$/i)),
-    total: parseMoney(valueAfterLabel(body, /^Order Total$/i)),
-  };
+  const subtotal = parseMoney(valueAfterLabel(body, /^\d+\s+items?$/i));
+  const tax = parseMoney(valueAfterLabel(body, /^TAX$/i));
+  // LEGO labels this line "Order Total" but it's actually the remaining
+  // BALANCE still to be charged to a card -- confirmed live 2026-08-26 on
+  // T513380643: subtotal $102.96 + tax $11.02 = $113.98, fully covered by
+  // two gift card deductions ($19.81 + $94.17), and this line read
+  // "$0.00". Kept as balance_due. The real order total is computed below
+  // as subtotal + tax so it's never silently wrong just because the order
+  // happened to be paid off entirely by gift card.
+  const balanceDue = parseMoney(valueAfterLabel(body, /^Order Total$/i));
+  const total =
+    subtotal != null && tax != null
+      ? Math.round((subtotal + tax) * 100) / 100
+      : null;
+  return { subtotal, tax, total, balance_due: balanceDue };
 }
 
 function extractPointsEarned() {
@@ -205,7 +228,29 @@ function buildRawData() {
   const paymentBreakdown = extractPaymentBreakdown();
   const lineItems = extractLineItemsWithPoints();
 
-  log("Extracted (checkout stage):", { orderNumber, totals, pointsEarned, paymentBreakdown, lineItems });
+  const paymentMethods = paymentBreakdown.map((t) => ({
+    type: t.type,
+    label: t.label,
+    amount: t.amount,
+  }));
+
+  // If gift-card/other itemized deductions don't cover the full total,
+  // the remainder was charged to a card. LEGO's summary block only shows
+  // gift cards as itemized "-$X" lines (confirmed live, see extractPaymentBreakdown) --
+  // a card payment isn't observed live yet, so it's inferred here from
+  // balance_due rather than read directly, and flagged inferred: true so
+  // it's obvious at review time in capture_queue_promotion.py.
+  if (totals.balance_due != null && totals.balance_due > 0.01) {
+    paymentMethods.push({
+      type: "card",
+      label: "Card (inferred from balance due)",
+      amount: totals.balance_due,
+      inferred: true,
+    });
+    warn(`Order Total showed a balance due of $${totals.balance_due} -- added an inferred card tender for that amount, verify at review.`);
+  }
+
+  log("Extracted (checkout stage):", { orderNumber, totals, pointsEarned, paymentMethods, lineItems });
 
   return {
     source: "chrome_extension",
@@ -216,13 +261,10 @@ function buildRawData() {
     line_items: lineItems,
     subtotal: totals.subtotal,
     tax: totals.tax,
-    total: totals.total,
+    total: totals.total, // computed: subtotal + tax -- the order's real value, not LEGO's "Order Total" balance-due field
+    balance_due: totals.balance_due, // raw "Order Total" as LEGO shows it -- amount left to charge a card, should net to $0 once payment_methods fully covers total
     rewards_earned: pointsEarned,
-    payment_methods: paymentBreakdown.map((t) => ({
-      type: t.type,
-      label: t.label,
-      amount: t.amount,
-    })),
+    payment_methods: paymentMethods,
     gift_card_last4: null, // not shown on this page -- order-details fills this in later
     shipments: [], // order hasn't shipped yet
   };
