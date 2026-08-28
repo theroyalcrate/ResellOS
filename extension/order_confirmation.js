@@ -199,6 +199,15 @@ function extractPaymentBreakdown() {
 // number, no points line, no price. GWP set numbers/quantities remain
 // order-details' job -- this only adds points_earned per item where LEGO
 // actually shows it.
+//
+// Fixed 2026-08-28: "Insiders Points on this order: {n}" is PER UNIT, not
+// per line -- confirmed live on T513265219 (Sonic: Speedster Lightning,
+// Qty: 2, page showed "65"; the order-level "You will earn 682 points"
+// only reconciles as 390 + 162 + 65*2 + 0, not 390 + 162 + 65 + 0). Same
+// per-unit-vs-line distinction unit_price/list_price already handle for
+// price -- points_earned below is now the QUANTITY-ADJUSTED total for the
+// line (what net_price-style downstream consumers want), with the raw
+// per-unit number kept separately as points_per_unit.
 function extractLineItemsWithPoints() {
   const body = document.body.innerText || "";
   const detailsMatch = body.match(/Order Details\s*\n([\s\S]*?)(?:\n\s*Support\s*\n|$)/i);
@@ -234,13 +243,16 @@ function extractLineItemsWithPoints() {
     if (unitPrice == null) {
       warn(`Could not find a price for "${match[1].trim()}" -- skipping unit_price.`);
     }
+    const quantity = parseInt(match[5], 10);
+    const pointsPerUnit = parseInt(match[3], 10);
     items.push({
       description: match[1].trim(),
       set_number: match[2],
-      points_earned: parseInt(match[3], 10),
+      points_earned: pointsPerUnit * quantity,
+      points_per_unit: pointsPerUnit,
       unit_price: unitPrice,
       list_price: listPriceMatch ? parseFloat(listPriceMatch[1]) : null,
-      quantity: parseInt(match[5], 10),
+      quantity: quantity,
       is_gwp: false,
     });
   }
@@ -303,7 +315,16 @@ function buildRawData() {
     warn(`Order Total showed a balance due of $${totals.balance_due}${cardLast4 ? ` -- matched to card ...${cardLast4}` : ""}, verify at review.`);
   }
 
-  log("Extracted (checkout stage):", { orderNumber, totals, pointsEarned, paymentMethods, lineItems });
+  // Sanity check: line item points_earned (now quantity-adjusted) should
+  // sum to the page's own "You will earn N points" total. Cheap way to
+  // catch the next per-unit-vs-line-quantity surprise before it silently
+  // ships bad data, the way the T513265219 case did.
+  const lineItemPointsSum = lineItems.reduce((sum, li) => sum + (li.points_earned || 0), 0);
+  if (pointsEarned != null && lineItemPointsSum !== pointsEarned) {
+    warn(`Line item points (${lineItemPointsSum}) don't sum to the page total (${pointsEarned}) -- verify at review.`);
+  }
+
+  log("Extracted (checkout stage):", { orderNumber, totals, pointsEarned, lineItemPointsSum, paymentMethods, lineItems });
 
   return {
     source: "chrome_extension",

@@ -57,7 +57,9 @@ Every writer into `capture_queue` (extension content scripts, Agent 1D) must sha
       "unit_price": "number",
       "net_price": "number",
       "is_gwp": "bool",
-      "list_price": "number | null (checkout stage only, added 2026-08-26 -- pre-sale price when unit_price reflects a Sale Price line)"
+      "list_price": "number | null (checkout stage only, added 2026-08-26 -- pre-sale price when unit_price reflects a Sale Price line)",
+      "points_earned": "number | null (checkout stage only -- TOTAL Insiders points for this line, quantity-adjusted; fixed 2026-08-28, see below)",
+      "points_per_unit": "number | null (checkout stage only, added 2026-08-28 -- the raw per-unit rate LEGO's page actually shows)"
     }
   ],
   "subtotal": "number | null",
@@ -99,6 +101,8 @@ to the old single-blank-placeholder behavior in that case, so nothing regresses 
 orders captured pre-shipment.
 
 `payment_methods[].last4` on a `"checkout"` capture — **added 2026-08-26.** Confirmed live on T513381170: a card tender's last4 (e.g. "3013") is readable directly from a "Payment Method" heading near the top of the confirmation page, separate from the itemized "Order Summary" gift-card deduction lines -- so a checkout-stage card entry now carries `last4` even though its `amount` is still derived from `balance_due` (see below) rather than an itemized line. Gift card entries at this stage still have no `last4` -- LEGO never shows the per-gift-card split anywhere.
+
+`line_items[].points_earned` quantity fix — **fixed 2026-08-28.** Confirmed live on T513265219 (Sonic: Speedster Lightning, Qty: 2): LEGO's "Insiders Points on this order: {n}" label is PER UNIT, not per line -- the page showed "65" for a 2-unit line, and the order-level "You will earn 682 points" total only reconciled as 390 + 162 + 65*2 + 0, not with 65 counted once. `points_earned` in `raw_data` is now the quantity-adjusted total for the line (previously the raw per-unit number, silently undercounting on any Qty > 1 item); the raw per-unit rate is kept separately as `points_per_unit`. `order_confirmation.js` also now sanity-checks that `sum(line_items[].points_earned) == rewards_earned` (the page's own order-level total) and warns on the console if they disagree, to catch the next surprise like this one before it ships bad data. Note: this bug never affected any promoted order's `insider_points_earned` -- `capture_queue_promotion.py` has only ever used the order-level `rewards_earned` field for that, never summed from line items -- it only affected the accuracy of the informational per-line `points_earned` value inside `raw_data`.
 
 `line_items[].unit_price` sale-price fix — **fixed 2026-08-26.** Confirmed live on T513381170 (Mirabel Key Chain): an item on sale renders both "Price $5.99" (list) and "Sale Price $3.59" (what's actually charged) in the same block; `order_confirmation.js` was always grabbing the first dollar amount after "Price", silently overstating `unit_price` to the list price on any sale item (subtotal only reconciled once `unit_price` used the sale price). Now prefers "Sale Price" when present. The list price is kept separately as `list_price`.
 
