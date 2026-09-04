@@ -5,9 +5,13 @@ ResellOS OAuth setup — generates two separate token files.
                                      Authorize as your BUSINESS Gmail account
                                      (the one that receives LEGO invoices via forwarding).
 
-  credentials/token_personal.json   gmail.modify + gmail.settings.basic
+  credentials/token_personal.json   gmail.modify + gmail.settings.basic + drive.readonly
                                      Authorize as your PERSONAL Gmail account
                                      (the one where old LEGO invoices lived before forwarding).
+                                     drive.readonly added 2026-09-04 for Agent 01D
+                                     (personal -> business Drive historical backfill) —
+                                     read-only is deliberate, this account's Drive is
+                                     never written to, moved from, or deleted from.
 
 Usage:
   python setup_oauth.py              # set up BOTH accounts (two browser windows)
@@ -18,11 +22,17 @@ If a valid token already exists it is refreshed silently (no browser).
 The first time you run this, a browser window opens for each account — the
 console will tell you which account to sign in with at each prompt.
 
+If you already ran this before 2026-09-04 and only have gmail scopes on
+credentials/token_personal.json, re-run `python setup_oauth.py --personal`
+once — Google requires a fresh consent screen when the requested scope list
+grows, even for an account that's already authorized. Existing gmail-only
+functionality (Agent 1B Mode 4/5, Agent 1C) is unaffected either way.
+
 Scope note: gmail.settings.basic is required for the personal account so the
 safety-net filter (Agent 01B Mode 5) can call settings.filters.create. If the
 authorization fails or those scopes are missing, go to:
   Google Cloud Console → APIs & Services → OAuth consent screen → Data Access
-and add: gmail.modify, gmail.settings.basic, drive.file
+and add: gmail.modify, gmail.settings.basic, drive.readonly
 """
 
 import os
@@ -53,6 +63,7 @@ BUSINESS_SCOPES = [
 PERSONAL_SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/gmail.settings.basic",
+    "https://www.googleapis.com/auth/drive.readonly",
 ]
 
 
@@ -113,9 +124,9 @@ def main() -> None:
     if do_personal:
         print()
         print("=" * 60)
-        print("  PERSONAL GMAIL")
+        print("  PERSONAL GMAIL + DRIVE (read-only)")
         print("  Sign in as: your PERSONAL Gmail account")
-        print("  (the one where historical LEGO invoices live)")
+        print("  (the one where historical LEGO invoices/emails live)")
         print("=" * 60)
         _setup_account(_PERS_TOKEN, PERSONAL_SCOPES, "PERSONAL")
 
@@ -125,6 +136,7 @@ def main() -> None:
     if do_personal:
         print(f"  Personal token : {_PERS_TOKEN}")
     print("\nYou can now run: python agents/agent_01b_invoice_filing.py")
+    print("             or: python agents/agent_01d_drive_historical_backfill.py")
 
 
 if __name__ == "__main__":
