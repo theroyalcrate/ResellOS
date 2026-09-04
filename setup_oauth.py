@@ -93,6 +93,11 @@ def _setup_account(token_path: str, scopes: list, label: str) -> None:
         print("  (If the browser doesn't open, copy the URL from the terminal.)")
         input("  Press Enter to open the browser now...")
         flow = InstalledAppFlow.from_client_secrets_file(_CREDS_FILE, scopes)
+        # Python 3.14 + Windows SSL interceptor workaround (see db_client.py
+        # get_client() for the same root cause) -- the refresh path above
+        # already uses _INSECURE_SESSION, but run_local_server()'s token
+        # exchange goes through the flow's own internal session instead.
+        flow.oauth2session.verify = False
         creds = flow.run_local_server(port=0)
 
     with open(token_path, "w") as f:
