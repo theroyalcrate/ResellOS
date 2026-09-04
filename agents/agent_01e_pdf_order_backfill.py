@@ -96,6 +96,15 @@ Modes:
                 agent's rows (source = agent_1d_pdf_backfill) --
                 how many promoted vs. still pending review, with reasons.
 
+KNOWN GAP, RE-RUN SAFETY: idempotency for order-bearing invoices is solid
+(re-running Mode 2 skips any order_number already in capture_queue). The
+one exception is a PDF that fails to parse entirely or has no extractable
+order_number at all -- those get queued fresh every run rather than being
+remembered, so re-running Mode 2 after reviewing a batch of those would
+re-queue duplicates of ones already discarded. Expected to be a small
+minority of the backlog; review and discard/fix those once rather than
+re-running Mode 2 repeatedly until they're cleared.
+
 Usage: python agents/agent_01e_pdf_order_backfill.py
 """
 
