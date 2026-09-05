@@ -75,7 +75,9 @@ The ledger's `GC Discount $` figure, summed per order, is treated as `exact` (va
 
 ### 5. New exact-source platforms
 
-`gift_cards.source_platform` gains three new recognized values: `gcx`, `cardcookie`, `arbitrage_card`. Cards entered from these sources always carry `discount_confidence = 'exact'` since the exchange's transaction record supplies the real purchase price directly — same tier as a direct retailer purchase or Josh's own ledger.
+`gift_cards.source_platform` gains four new recognized values: `gcx`, `cardcookie`, `arbitrage_card`, `cardcenter_cc`. Cards entered from these sources always carry `discount_confidence = 'exact'` since the exchange's transaction record supplies the real purchase price directly — same tier as a direct retailer purchase or Josh's own ledger.
+
+`cardcenter_cc` added 2026-09-05 — a distinct exchange, not an alias for `arbitrage_card`, confirmed by Josh. Josh pulled last-4, face value, and discount amount for a batch of additional gift cards directly from cardcenter.cc and will supply that data for import; it should reconcile against the live `gift_cards` table in Supabase (not a separate file) by matching on last-4/face-value/retailer, same as any other exact-source import.
 
 ### 6. Historical vs. going-forward posture, made explicit
 
