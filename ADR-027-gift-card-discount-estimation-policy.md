@@ -51,23 +51,22 @@ Every `gift_cards` row gets a confidence tier on its discount data, not a binary
 
 New column: `gift_cards.discount_confidence` (`exact` | `estimated_default` | `unknown`). Reports that roll up cost basis (P&L, ROI) can filter or visually flag `estimated_default` rows rather than presenting them with the same authority as `exact` ones — consistent with the system's existing philosophy of never silently guessing (DECISION 017, ADR-023, ADR-024).
 
-### 2. krogergiftcards.com is an exact, parseable source — not a default rate
+### 2. krogergiftcards.com: use exact data when it's already on hand, default otherwise — no chasing required
 
-Reverses the original draft of this ADR. `krogergiftcards.com` cards are **not** assigned a flat default discount. Instead:
+**Revised 2026-09-05 for simplicity — see Simplification note at the end of this ADR.** The 65 real order-confirmation emails already pulled this session (via Zapier → Josh's personal Gmail) give an exact discount_pct for those specific orders — use them, free win, `discount_confidence = 'exact'`, no extra work since the pull is already done. For every other krogergiftcards.com card — no email pulled, none exists, whatever — apply the **11.11% default** (the empirically dominant rate, 68% of the 65-order sample) at `discount_confidence = 'estimated_default'` and move on. There is no requirement to go find or match more emails for the historical backlog; that only happens opportunistically if the data is already sitting there.
 
-- The Kroger Gift Card Mall order-confirmation email (subject "Your Gift Card Order is Complete!", from `no-reply@giftcardmall.com`, landing in Josh's personal Gmail and reachable via the Zapier Gmail connection) is treated as a receipt-equivalent document. Its face value and real `TOTAL:` charged amount yield an exact per-order discount_pct, imported at `discount_confidence = 'exact'`.
-- **11.11% is retained only as a last-resort estimate** — used solely when a specific card/order cannot be matched to any confirmation email (e.g. email deleted, search gap, pre-dates the account). That fallback always sets `discount_confidence = 'estimated_default'`, clearly distinguished from the 68% of orders where the real rate is known exactly.
-- Multi-retailer basket orders (LEGO bundled with other retailers' cards under one order-level discount) import the order-level discount as `exact` at the order level; per-card apportionment within that order is an open question (see below) and should not block importing what's known.
+Multi-retailer basket orders (LEGO bundled with other retailers' cards under one order-level discount): apply the same order-level discount_pct to every card in the basket. No per-card apportionment math, no research — `estimated_default` if it wasn't from an exact per-card figure to begin with. Good enough; not worth more precision for what it costs to get.
 
-### 3. Source-based default discount table (giftcards.com only, for now)
+### 3. Source-based default discount table
 
-Used only when no exact record is available and no email-parsing pipeline has been built yet for that source:
+Used whenever no exact record is on hand — the normal path for most historical cards, not a fallback of last resort:
 
-| `source_platform` | Default `discount_pct` | Notes |
-|---|---|---|
-| `giftcards.com` | 10.00 | Believed common rate; 3 known exceptions use 10% Capital One Shopping cashback instead — those get modeled as `cashback_expected`, not `discount_pct`, when identified. Not yet empirically verified against real order emails the way Kroger was — candidate for the same treatment as Section 2 in a future session. |
+| `source_platform` | Default `discount_pct` |
+|---|---|
+| `giftcards.com` | 10.00 |
+| `krogergiftcards.com` | 11.11 |
 
-`krogergiftcards.com` is intentionally absent from this table as of this revision — see Section 2. Any card later confirmed via a real receipt gets corrected individually, and using this table always sets `discount_confidence = 'estimated_default'`, never `exact`.
+Three known giftcards.com purchases used 10% Capital One Shopping cashback instead of a straight discount — model those as `cashback_expected`, not `discount_pct`, if and when they're identified, but don't go looking for them. Any card later confirmed via a real receipt or exchange import gets corrected individually; using this table always sets `discount_confidence = 'estimated_default'`, never `exact`. No further verification pass against real emails is planned for either source — the defaults stand indefinitely unless exact data shows up on its own (a receipt, an exchange export, an email already pulled for another reason).
 
 ### 4. Historical brickprobe_purchases_2026-06-19.csv ledger import
 
@@ -85,9 +84,11 @@ This ADR formally establishes what was previously implicit: cost basis on 2025 o
 
 ## Open Questions
 
-1. **Multi-retailer basket apportionment.** When a single Kroger order's discount covers a LEGO card plus other retailers' cards, how should the order-level discount be split across cards? Candidates: pro-rata by face value, pro-rata by amount paid, or flag as `exact` at the order level only and leave per-card apportionment as `unknown` until a better method is designed. Not resolved in this ADR.
-2. **July-2025 "9 orders" discrepancy.** Josh recalled 9 July-2025 Kroger orders at the 11.11% structure; the 65-order email pull contains none. Needs Josh's input — different account/alias, a search that missed them, or a misremembered date — before the importer is built against the full historical set.
-3. **giftcards.com email-parsing pass.** Not yet attempted. Should get the same treatment as Section 2 once time allows, rather than remaining on a flat 10% default indefinitely.
+1. **July-2025 "9 orders" discrepancy.** Josh recalled 9 July-2025 Kroger orders at the 11.11% structure; the 65-order email pull contains none. Not blocking anything — the 11.11% default in Section 3 covers these either way — but worth a sentence from Josh sometime on whether it's a different account/alias or a misremembered date.
+
+## Simplification note (2026-09-05)
+
+Josh's feedback: this ADR was adding accuracy at the cost of his time, and efficiency of data entry is priority 1A — he can already track all of this in Brickprobe; the point of ResellOS is to be a *faster* way to capture what Brickprobe couldn't, not a slower, more rigorous one. Revised accordingly: defaults are the normal path (not a fallback of last resort), multi-retailer-basket apportionment is a fixed, zero-research rule instead of an open design question, and no further email-verification passes are planned for either giftcards.com or krogergiftcards.com — exact data gets used only when it's already sitting there for free (an exchange export, an already-completed email pull), never actively chased for the historical backlog. The `discount_confidence` column and tiering stay, since they cost nothing to apply (set automatically from source, no decision required from Josh per row) and are the thing that made this simplification safe to make in the first place — an `estimated_default` row is honestly labeled as a guess, so applying broad defaults liberally doesn't quietly corrupt anything.
 
 ## Implementation note (2026-09-05)
 
