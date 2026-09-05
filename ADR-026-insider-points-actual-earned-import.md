@@ -66,3 +66,16 @@ Checked live (lego.com/en-us/insiders/account) while working the 220-order looku
 - No CSV/export download control was found anywhere on this page — "export" in the original context may have meant "this on-screen history," not a literal downloadable file. Worth confirming intent before building the weekly import agent.
 
 **Net effect:** the import agent this ADR calls for cannot be built against the "Points Earned" tab as observed — it lacks the join key needed for either matching option. Before writing that agent, either (a) get "Purchases Made" working and confirm it carries order numbers, or (b) find another authoritative per-order points source. Until then, `content.js`'s `capture_stage: "shipped"` captures continue to have `rewards_earned: null` for anything this old (order-details never shows points; only the checkout-stage `order_confirmation.js` page does, and per Josh, that page frequently 404s once an order is old enough — unconfirmed exactly how old, pending his check).
+
+---
+
+## Addendum 2 — 2026-09-05, "Purchases Made" tab works after a page reload
+
+Josh reloaded the page and the tab that errored earlier now works. This changes the outlook from Addendum 1 considerably — it's a real per-order/per-visit ledger, not just a points feed:
+
+- Each row: `Date | Order identifier | Invoice number | order-level Points Earned`, then a per-line breakdown underneath (either `Item {set_number} {name} — +N points` for a web order, or `SKU: {number} — +N points` with no name/set-number for other purchase types).
+- Web orders show as `WEB_{order_number}` (e.g. `WEB_T506314143`) — the `T...` order number is right there, directly matchable to `orders.order_number` with a substring strip, no fuzzy matching needed.
+- **In-store / other-channel purchases show as a different identifier shape** (e.g. `LBR_20260601_0787_1_LEGO0060036940`) with a matching invoice number, and their line items are SKU-only — no set number, no description. Per Josh: this surfaces purchases that were never captured anywhere (not in Brickprobe, not in ResellOS) — a real gap this page closes, not just a points source.
+- 79 pages total at this session's check. A one-time (or periodic) walk of this whole table is very likely a *more* efficient path to backfilling `rewards_earned` across the 220-order queue (and beyond) than visiting 220 individual order-detail pages — one paginated source instead of 220 page loads — but per Josh's efficiency-first feedback (see ADR-027's Simplification note), this shouldn't turn into its own elaborate scraping project without checking scope with him first. Flagging the opportunity, not committing to build it here.
+
+This mostly reverses Addendum 1's pessimism: the join key (order number) is present, just not on the tab that was broken at the time. `capture_stage: "shipped"` captures no longer need to accept `rewards_earned: null` as permanent for old orders — this table is second source, independent of whether `order_confirmation.js`'s checkout-only page 404s.
