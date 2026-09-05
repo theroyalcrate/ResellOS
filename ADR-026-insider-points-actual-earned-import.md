@@ -54,3 +54,15 @@ This is scoped to LEGO Insider only — the retailer with a reliable individual 
 - ADR-023 — Capture Queue Promotion and Extension Primacy (matching-cascade philosophy reused here)
 - ADR-025 — Pre-Shipment Estimated Cost Basis Calculator (confirms points never need to be guessed there)
 - CONTEXT.md — "Rewards earned vs redeemed" rule
+
+---
+
+## Addendum — 2026-09-05, live verification of the Insider portal export
+
+Checked live (lego.com/en-us/insiders/account) while working the 220-order lookup queue. Findings that affect the assumptions above:
+
+- **"Points Earned" tab has no order number and no dollar amount** — each row is just `Date | Activity ("LEGO Purchase" / "Bonus Points" / "Rewards Redeemed") | Points`, e.g. `08/28/2026 | LEGO Purchase | +682`. Clicking a row does not expand any further detail. This directly undercuts Decision § "New import agent," option 1 (order number "if present in the export" — it is not present in this view) and weakens option 2 (date + dollar amount fallback — no dollar amount is shown here either, only points; matching would have to go on date + points value alone, which is far more collision-prone across a day with multiple orders).
+- **"Purchases Made" tab returned a bare "Error"** on the live site during this check — this may be the actual order-level export ADR-026 was written assuming exists (it's the more likely candidate, given the tab name), but it wasn't reachable to confirm. Needs a retry — possibly transient, possibly needs to be checked from Josh's own logged-in session rather than through this session's browser automation.
+- No CSV/export download control was found anywhere on this page — "export" in the original context may have meant "this on-screen history," not a literal downloadable file. Worth confirming intent before building the weekly import agent.
+
+**Net effect:** the import agent this ADR calls for cannot be built against the "Points Earned" tab as observed — it lacks the join key needed for either matching option. Before writing that agent, either (a) get "Purchases Made" working and confirm it carries order numbers, or (b) find another authoritative per-order points source. Until then, `content.js`'s `capture_stage: "shipped"` captures continue to have `rewards_earned: null` for anything this old (order-details never shows points; only the checkout-stage `order_confirmation.js` page does, and per Josh, that page frequently 404s once an order is old enough — unconfirmed exactly how old, pending his check).
