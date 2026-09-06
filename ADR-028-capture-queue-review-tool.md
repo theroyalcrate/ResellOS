@@ -1,6 +1,6 @@
 # ADR-028: Adopt a Minimal, Purpose-Built Review Tool for Capture Queue Promotion
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-09-06
 **Deciders:** Josh
 **Supersedes:** Nothing — builds a visual layer on top of ADR-023's `capture_queue` promotion contract (LIST/PROMOTE/DISCARD via `capture_queue_promotion.py`); does not change that contract's data rules, DECISION 017's cost-basis gate, or any confirmed/settled-order locking behavior.
@@ -101,15 +101,19 @@ The decisive axis here is builder fit, not raw capability. Every option can tech
 
 ## Action Items
 
-1. [ ] Confirm Streamlit (or name an alternative) as the specific tool — this ADR recommends it, but the exact choice is still open for Josh's sign-off
+1. [x] Streamlit confirmed (2026-09-06, same evening) — see Resolution below
 2. [ ] Enumerate the exact `capture_queue` fields that matter for a promote/discard call (order number, retailer, date, total, line-item summary, `order_validators.py` warnings) and confirm nothing important is missing
 3. [ ] Build a first version that lists pending rows and calls the existing promote/discard logic from `capture_queue_promotion.py` directly, rather than reimplementing it
 4. [ ] Test it against a handful of real Agent 01E-flagged rows once that agent has run, before trusting it for the full backlog
 
 ---
 
-## Open questions for the next session
+## Resolution (2026-09-06, same evening)
 
-- Should this tool eventually show basic order/build-progress status too (a lightweight "how many orders, how much is confirmed vs. pending"), or should it stay strictly scoped to `capture_queue` promotion only?
-- Once a real Phase 2/3 UI eventually gets built, does this interim tool get retired outright, or does it stick around as an internal ops screen alongside a customer-facing product?
-- Is `capture_queue_promotion.py` itself deprecated once this exists, or kept as a scriptable fallback for cases the visual tool doesn't cover well (e.g. bulk-approving many clearly-clean rows at once)?
+Josh confirmed all three open questions above before any code was written:
+
+- **Tool choice:** Streamlit, as recommended. Explicit reasoning given: this phase of the project is also where Josh is learning to build, and what gets learned building the Streamlit version (Supabase queries, thinking through what a review screen needs) carries forward into the eventual full UI build — not wasted effort even though the tool itself is disposable.
+- **Retirement path:** Likely retired once the full ResellOS UI exists, rather than kept indefinitely as a separate internal ops screen. Josh's reasoning: permanently maintaining a second, separate review surface alongside a real product UI is over-complication — reviewing and promoting a queued order should be core, first-class functionality *in* ResellOS itself, not something that lives forever in a side tool. This sharpens the original ADR's framing (which left "stays forever as an ops screen" open as a live option) — it's now the less likely outcome, not a coin flip.
+- **`capture_queue_promotion.py` CLI:** Stays. Confirmed as the permanent scriptable fallback (e.g. bulk operations, automation, anything the visual tool isn't built to handle) rather than being deprecated once the Streamlit tool exists. The two are complementary, not competing.
+
+**Still genuinely open:** whether the Streamlit tool eventually shows basic progress/status (orders confirmed vs. pending) beyond strict `capture_queue` promotion, or stays scoped narrowly forever. Not decided — revisit if/when the narrow version starts feeling incomplete in practice.
