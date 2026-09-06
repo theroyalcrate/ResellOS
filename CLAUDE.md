@@ -1,6 +1,6 @@
 # ResellOS — Workspace Identity
 **Layer 0 — Read this first. Every session. No exceptions.**
-**Last updated: 2026-07-30** — this file drifts easily since it doesn't get touched every session like SESSION_LOG.md does; if anything here conflicts with SESSION_LOG.md, SESSION_LOG.md wins.
+**Last updated: 2026-09-06** — this file drifts easily since it doesn't get touched every session like SESSION_LOG.md does; if anything here conflicts with SESSION_LOG.md, SESSION_LOG.md wins.
 
 ---
 
@@ -36,18 +36,35 @@ ResellOS/
 ├── CLAUDE.md                    ← You are here (Layer 0)
 ├── CONTEXT.md                   ← Project orientation (Layer 1)
 ├── SESSION_LOG.md               ← Build state, always current (Layer 1)
+├── SESSION_LOG_ARCHIVE.md       ← Older session history (P0 → 2026-06-26), split out 2026-09-06
+├── ADR-011 .. ADR-027 (*.md)    ← Individual architecture decision records, repo root — 11 as of 2026-09-05,
+│                                  each with Status/Date/Deciders/Supersedes. Not the same as the (now largely
+│                                  superseded) Master Architecture Document — ADRs + CONTEXT.md's "Architecture
+│                                  Decisions Already Made" table are the current source of truth.
 ├── stages/                      ← Not in use — see note below
 ├── references/                  ← Shared stable reference material — populated
 │   ├── retailer_email_sources.md   ← Per-retailer sender/subject filter definitions
 │   ├── lego_email_parser_spec.md   ← LEGO order-confirmation/receipt parser spec
 │   └── kohls_repricing_review_design.md ← Kohl's partial-cancel repricing design
-├── agents/                      ← Agent 1B (invoice filing), 1C (historical backfill), 09 (Purchase Planner), 10 (Stock Watch), email_enricher.py
-├── tests/                       ← Test and verification scripts (161 passing as of 2026-07-19)
-├── migrations/                  ← Database migration files (through 016; next open slot 017 — see SESSION_LOG numbering note)
+├── extension/                   ← Chrome extension (LEGO.com capture v1, built 2026-08-21, proven live 2026-08-22)
+│   ├── manifest.json, background.js, content.js, order_confirmation.js, popup.html/js
+├── agents/                      ← agent_01b_invoice_filing.py, agent_01c_historical_backfill.py,
+│                                  agent_01d_drive_historical_backfill.py, agent_01e_pdf_order_backfill.py,
+│                                  agent_09_purchase_planner.py, agent_10_stock_watch.py, email_enricher.py
+├── agent_02_order_entry.py, agent_05_gift_cards.py, agent_07_cashback.py, agent_08_cost_basis.py
+│                                  ← Root-level agents (numbered by session, not by the conceptual agent list —
+│                                    see CONTEXT.md Open Question on the agent_08 naming collision)
+├── capture_queue_promotion.py   ← LIST/PROMOTE/DISCARD workflow, capture_queue → real orders (ADR-023)
+├── cost_basis_status_report.py, cost_basis_checks.py, order_validators.py, invoice_parser.py,
+│   db_client.py, db_writer.py, walmart_business_import.py  ← Other root-level operational scripts
+├── credentials/                 ← OAuth tokens (gitignored) — token_business.json, token_personal.json
+├── tests/                       ← Test and verification scripts + tests/fixtures/emails/
+├── migrations/                  ← Database migration files (through 019; see SESSION_LOG numbering note
+│                                    for the 012/012b and 015/016 renumbering history)
 └── skills/                      ← Claude Code skill files
 ```
 
-> **Note (revised 2026-07-30):** `stages/` was never actually used — every session since S01 has taken its direction from SESSION_LOG.md's "Start Here — Next Session" section instead. `references/` did get populated (3 files, listed above). Don't expect a `stages/CURRENT/` folder to exist; if the Session Log and this file's folder diagram ever disagree, trust the Session Log.
+> **Note (revised 2026-09-06):** `stages/` was never actually used — every session since S01 has taken its direction from SESSION_LOG.md's "Start Here — Next Session" section instead. `references/` has stayed at 3 files. Don't expect a `stages/CURRENT/` folder to exist; if the Session Log and this file's folder diagram ever disagree, trust the Session Log. This diagram was last verified against the real repo listing on 2026-09-06 — before that it had drifted for well over a month (missing the ADRs, the extension, and several agents entirely).
 
 ---
 
@@ -79,9 +96,11 @@ Cowork is a distinct third surface, not a hybrid of the other two — verify wha
 
 ## Current Session
 
-**Do not trust the label below — it goes stale fast.** Always open SESSION_LOG.md → "Start Here — Next Session" for the real, current scope before doing anything. As of the last update to this file (2026-07-30, reflecting state through 2026-07-19):
+**Do not trust the label below — it goes stale fast.** Always open SESSION_LOG.md → "Start Here — Next Session" for the real, current scope before doing anything. As of the last update to this file (2026-09-06, reflecting state through 2026-09-04/05):
 
-**→ S10** — Variable-earn schema (per-order observed rewards, Kohl's Cash block model) + Kohl's earn-cliff pin, competing for priority against **Tier 2 PDF-content matching for Agent 1B** (flagged 2026-07-18 as the higher-leverage item — most LEGO receipt emails have no order number in the subject line, so the ~200-email invoice backlog can't bulk-file until this exists).
+**The capture pipeline is proven end-to-end on real data.** Chrome extension v1 (LEGO.com) → `capture_queue` → `capture_queue_promotion.py` → live order, confirmed 2026-08-22 against a real order (T512391077). S10 (variable-earn schema / Kohl's earn cliff) is still open but now lower priority — once the extension covers Kohl's, most of S10's Kohl's-Cash-block-model half becomes moot.
+
+**→ Next up (per SESSION_LOG.md "Start Here," 2026-09-04):** Agent 01E (historical PDF → order backfill) was built 2026-09-04 but not yet run — needs a `git push` of several locally-committed-but-unpushed commits via Claude Code first (Cowork's device bridge has no git push credentials), then Mode 1 (Preview) before Mode 2. Walmart Business now has a working CSV import path (`walmart_business_import.py`, first real run 2026-09-04: 26 orders/$7,167.34) — this replaced its slot in the Chrome extension retailer queue, which is now just Kohl's, Walmart, and Macy's.
 
 Also live and usable but not yet exercised for real: Agent 09 (Purchase Planner, built 2026-07-18, untested against a real buying session) and Agent 10 (buy-side stock/discount watch, built 2026-07-19, only the Walmart checker proven — needs `APIFY_API_TOKEN`/`FIRECRAWL_API_KEY` in `.env` before it runs standalone).
 
