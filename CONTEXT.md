@@ -429,11 +429,14 @@ Historical LEGO order data is captured by walking the live LEGO order history pa
 
 ## Document Hierarchy — What Supersedes What
 
-1. **Session Log (ResellOS_Session_Log.md)** — single source of truth for build state. Read this before any VS Code session. If anything conflicts, Session Log wins.
-2. **This context document** — broad orientation for Claude at conversation start.
-3. **Master Architecture Document (v2.1)** — all design decisions current through DECISION 018 (2026-06-05), SQLite references removed, multi-vertical catalog design included.
-4. **Project Map (v2.0)** — accurate session history through S8.5, forward plan through community launch and multi-vertical expansion.
-5. **Ideas Doc** — future feature candidates only. Sequencing section is stale — ignore it.
+**Revised 2026-09-06 — the Master Architecture Document and Project Map are retired.** Both were static, hand-maintained snapshots ("v2.1, current through DECISION 018" / "v2.0, through S8.5") that stopped getting updated once ADR files became the live decision record in late June. By 2026-09-06 they were roughly three months and dozens of sessions stale, and their duplicate copies were removed from the claude.ai Project's doc list the same day as this revision. They are not deleted from history (still findable in old commits/uploads if ever needed for archaeology), but they are no longer authoritative and nothing should defer to them.
+
+1. **SESSION_LOG.md** — single source of truth for build state. Read this before any session. If anything conflicts, this wins.
+2. **This context document (CONTEXT.md)** — durable business logic, architecture decisions, open questions.
+3. **ADR-*.md** (repo root) — individual architecture decision records; the real current source of truth for *decisions*, alongside this document's "Architecture Decisions Already Made" table above.
+4. **`references/*.md`** — stable per-topic reference material (email parsing specs, repricing design, etc.).
+5. **SESSION_LOG_ARCHIVE.md** — historical build sessions only (P0 → 2026-06-26). Reference-only, never "what's next."
+6. **Ideas Doc** — future feature candidates only. Sequencing section is stale — ignore it.
 
 ---
 
