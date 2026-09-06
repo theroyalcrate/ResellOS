@@ -53,3 +53,7 @@ credentials/token.json
 credentials/token_business.json
 credentials/token_personal.json
 credentials/
+
+# Unrelated plugin cache (Higgsfield) — not part of ResellOS, keeps landing in this folder
+.agents/
+skills-lock.json

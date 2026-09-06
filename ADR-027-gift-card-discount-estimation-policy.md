@@ -1,7 +1,7 @@
 # ADR-027 — Gift Card Discount Estimation Policy (Confidence-Tagged Cost Basis)
 
 **Date:** 2026-09-05
-**Status:** Proposed
+**Status:** Accepted
 **Supersedes:** Nothing — extends the Agent 08 Cost Basis Engine's Layer 2 (S08) without changing its math
 
 ---
