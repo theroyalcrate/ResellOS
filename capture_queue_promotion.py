@@ -99,7 +99,17 @@ def _map_line_items(raw_items):
         unit_price = float(it.get("unit_price") or 0)
         net_price = it.get("net_price")
         net_price = float(net_price) if net_price is not None else unit_price
-        items.append({
+
+        # ADR-029 / migration 020 (2026-09-14): no capture path (extension or
+        # PDF backfill) detects a retailer's post-order cancellation on its
+        # own today -- this only ever comes from raw_data a human already
+        # annotated (e.g. the ADR-028 review tool's "Cancelled" checkbox, or
+        # a manual capture_queue insert like the T513531463-style GWP-hack
+        # backfill). Defaults to "received" so every existing/ordinary
+        # capture is unaffected.
+        item_status = it.get("item_status") or "received"
+
+        mapped = {
             "set_name":     it.get("description") or "(no description)",
             "set_number":   it.get("set_number"),
             "quantity":     quantity,
@@ -109,7 +119,16 @@ def _map_line_items(raw_items):
             "line_total":   round(net_price * quantity, 2),
             "is_gwp":       bool(it.get("is_gwp")),
             "is_retiring":  True,
-        })
+            "item_status":  item_status,
+            "cancellation_reason": it.get("cancellation_reason"),
+            "cancelled_at": it.get("cancelled_at"),
+        }
+        if item_status == "cancelled":
+            # Never actually charged -- zero out regardless of whatever
+            # unit_price/net_price the raw capture happened to carry.
+            mapped["line_total"] = 0
+            mapped["line_discount"] = 0
+        items.append(mapped)
     return items
 
 
@@ -295,6 +314,11 @@ def _build_order(raw, row):
     tax_exemption_method = "at_purchase" if tax_exempt else "not_applicable"
 
     discount_total = round(sum(it["line_discount"] for it in items), 2)
+    # ADR-029: a cancelled item is deliberately still counted here -- this
+    # reflects what the order was originally confirmed to contain, which is
+    # a fact independent of what later happened to any one item. Do not
+    # "fix" this into excluding cancelled items without re-reading ADR-029's
+    # Consequences section first.
     expected_item_count = sum(it["quantity"] for it in items)
 
     # rewards_earned isn't populated by the capture flow today (the extension
@@ -356,8 +380,9 @@ def _print_parsed_summary(order, items, rewards_earned):
     print(f"\n  LINE ITEMS ({len(items)}):")
     for i, it in enumerate(items, 1):
         gwp_flag = " [GWP]" if it["is_gwp"] else ""
+        cancelled_flag = " [CANCELLED]" if it.get("item_status") == "cancelled" else ""
         print(
-            f"  {i}. {it['set_name']}{gwp_flag}  "
+            f"  {i}. {it['set_name']}{gwp_flag}{cancelled_flag}  "
             f"qty {it['quantity']} @ ${it['unit_price']:.2f}  "
             f"(set#: {it.get('set_number') or '?'})"
         )

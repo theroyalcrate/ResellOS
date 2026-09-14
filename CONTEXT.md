@@ -196,8 +196,8 @@ ResellOS is designed to expand beyond LEGO to other reselling verticals (Pokemon
 
 ## Known Edge Cases Already Designed For
 
-**Partial order cancellations with GWP retention (A-003):**
-Occurred 15-20 times in Q4 2025 — a predictable seasonal pattern, not an edge case. LEGO cancels sets but honors GWP from original qualifying order value. Manual adjustment workflow available to ANY tier user at ANY time — no automation dependency. Cliff edge warnings for Kohl's and Walmart Business when cancellation crosses threshold.
+**Partial order cancellations with GWP retention / the "GWP-hack" pattern (A-003):**
+Occurred 15-20 times in Q4 2025 — a predictable seasonal pattern, not an edge case. LEGO cancels one item on an order (usually out-of-stock-again) but honors the GWP that item's presence qualified for at checkout; the rest of the order ships normally. Josh confirmed 2026-09-14 this is a deliberate, recurring sourcing tactic (he targets sets he actually wants — a real ship is a bonus, a cancellation still nets a cheap GWP) and asked for it to be trackable, not just handled ad hoc. **UPDATED 2026-09-14 — now handled structurally, not just by manual convention:** `line_items.item_status` (`received`/`cancelled`, migration 020) keeps a row for the cancelled item instead of omitting it, at $0 cost basis and excluded from inventory, so the pattern is queryable later. See ADR-029 for full rationale, validator changes, and the retrofitted real example (T513531463). Cliff edge warnings for Kohl's and Walmart Business when cancellation crosses threshold are unaffected by this — still relevant, still manual.
 
 **Retailer-specific cancellation behavior:**
 - LEGO — GWP may still ship despite cancellation. Unique favorable mechanic.
@@ -328,6 +328,7 @@ Capture screenshots of current reselling software using Claude in Chrome. Annota
 | Database | Supabase PostgreSQL — permanent. No SQLite. No migration planned. |
 | Costing method | FIFO — locked 2026-06-26 (ADR-021). CPA confirmed this is a personal-preference choice. Do not change after data accumulates. |
 | GWP cost treatment | Philosophy C — proceeds_reduce_order. Configurable per user. |
+| Mid-order cancellation tracking ("GWP-hack" pattern) | `line_items.item_status` (`received`/`cancelled`, migration 020) keeps a retailer-cancelled item as its own row — $0 cost basis, never enters inventory, but queryable for pattern reporting — instead of omitting it from line_items entirely. Orthogonal to `is_gwp`. (ADR-029, DECISION 2026-09-14) |
 | Cost basis locking | Locks at settlement. Returns create P&L adjustments, never reopen cost basis. |
 | Negative cost basis | Valid and correct output. Never suppress. |
 | Retailer rewards | Separate pools per retailer — earned and spent within each ecosystem |

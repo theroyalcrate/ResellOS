@@ -32,6 +32,27 @@ from db_client import get_client, PHASE_1_USER_ID
 
 
 # --------------------------------------------------------------------------- #
+# 0. Cancelled-item exclusion (ADR-029 / migration 020, 2026-09-14)
+# --------------------------------------------------------------------------- #
+
+def _received_only(items: list[dict]) -> list[dict]:
+    """Items the retailer actually shipped/Josh actually received --
+    excludes item_status == 'cancelled' rows (ADR-029: a retailer cancelled
+    this specific item after the order was confirmed, most commonly the
+    "GWP-hack" pattern where a qualifying item is cancelled but the GWP it
+    unlocked still ships). Cancelled items are *expected* to be priced at
+    $0/unknown and never received -- without this filter they'd trip the
+    GWP-price-mismatch and missing-set-number checks below on every single
+    occurrence of an intentional, recurring pattern (15-20+ times/year per
+    Josh), which is exactly backwards from what those checks are for.
+    Items with no item_status key at all (any write path from before this
+    field existed) are treated as received, matching the column's DB
+    default.
+    """
+    return [it for it in items if it.get("item_status") != "cancelled"]
+
+
+# --------------------------------------------------------------------------- #
 # 1. Cross-shipment duplicate set_number (the core ask)
 # --------------------------------------------------------------------------- #
 
@@ -151,9 +172,13 @@ def check_gwp_price_consistency(items: list[dict]) -> list[dict]:
     "Is this a GWP?" and "Price paid per unit" — with nothing tying them
     together, so a typo or a confused yes/no answer can slip through. This
     check exists mainly for that path, but runs on any item list either way.
+
+    Cancelled items (item_status == 'cancelled', ADR-029) are excluded first
+    — they're expected to be $0/unpriced and not flagged GWP, and that's
+    correct, not suspicious.
     """
     warnings = []
-    for it in items:
+    for it in _received_only(items):
         price = it.get("unit_price")
         if price is None:
             continue
@@ -192,9 +217,12 @@ def check_missing_set_numbers(items: list[dict]) -> list[dict]:
     same gap behind the "backfill set_number on old line items" open question.
     Surfacing it at write time costs nothing and means fewer items need a
     later backfill pass.
+
+    Cancelled items (ADR-029) are excluded — a retailer-cancelled item's set
+    number not being worth chasing down is expected, not a gap to flag.
     """
     warnings = []
-    for it in items:
+    for it in _received_only(items):
         if it.get("is_gwp"):
             continue  # GWP items are commonly catalog-light; not worth flagging
         if not it.get("set_number"):
@@ -217,10 +245,19 @@ def check_line_items_reconcile(items: list[dict], expected_subtotal: Optional[fl
     subtotal within a cent. Complements the order-level total check
     db_writer.py already does (invoice total vs. recorded order total) by
     checking the line-item-level math feeding into it.
+
+    Cancelled items (ADR-029) always carry line_total 0 and were never part
+    of what was actually charged, so they're excluded before summing —
+    harmless either way today since a cancelled row's line_total is enforced
+    at 0 by every write path, but excluded explicitly so this stays correct
+    even if that enforcement ever changes.
     """
     if expected_subtotal is None:
         return []
-    paid_total = round(sum(float(it.get("line_total") or 0) for it in items if not it.get("is_gwp")), 2)
+    paid_total = round(
+        sum(float(it.get("line_total") or 0) for it in _received_only(items) if not it.get("is_gwp")),
+        2,
+    )
     diff = round(abs(paid_total - float(expected_subtotal)), 2)
     if diff > 0.01:
         return [{

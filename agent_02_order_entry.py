@@ -120,7 +120,7 @@ def get_yes_no(prompt, default="n"):
 # --------------------------------------------------------------------------- #
 
 def _lego_item_points(item, order_multiplier):
-    if item.get("is_gwp"):
+    if item.get("is_gwp") or item.get("item_status") == "cancelled":
         return 0
     m = item.get("lego_multiplier_override") or order_multiplier
     # int(x + 0.5) gives round-half-up for positive values; Python's round()
@@ -168,6 +168,29 @@ def collect_line_items(retailer="", lego_order_multiplier=1):
         is_gwp      = get_yes_no("    Is this a GWP?")
         is_retiring = get_yes_no("    Retiring set?", default="y")
 
+        # ADR-029 / migration 020 (2026-09-14): the "GWP-hack" pattern -- a
+        # retailer cancels this specific item after the order was confirmed
+        # (almost always out-of-stock-again) while still shipping the rest
+        # of the order, including any GWP this item's presence qualified for.
+        # Josh confirmed this recurs 15-20+ times/year, predictably around
+        # Q4, and asked for it to be tracked rather than just noted in prose.
+        item_status = "received"
+        cancellation_reason = None
+        cancelled_at = None
+        if get_yes_no(
+            "    Was this item cancelled by the retailer (never charged, never received)?",
+            default="n",
+        ):
+            item_status = "cancelled"
+            cancellation_reason = get_input(
+                "    Cancellation reason (e.g. out_of_stock_after_gwp_qualified, blank if unknown)",
+                required=False,
+            )
+            cancelled_at = get_input(
+                "    Cancellation date (YYYY-MM-DD, blank if unknown)", required=False
+            )
+            print("    -> Recorded as cancelled: $0 cost basis, excluded from inventory.")
+
         item = {
             "set_name":     set_name,
             "set_number":   set_number,
@@ -178,9 +201,18 @@ def collect_line_items(retailer="", lego_order_multiplier=1):
             "line_total":   round(unit_price * quantity, 2),
             "is_gwp":       is_gwp,
             "is_retiring":  is_retiring,
+            "item_status":  item_status,
+            "cancellation_reason": cancellation_reason,
+            "cancelled_at": cancelled_at,
         }
+        if item_status == "cancelled":
+            # Never actually charged, regardless of what was entered above as
+            # the would-have-been price -- keep unit_price/msrp for record,
+            # zero out what affects cost basis and order-total reconciliation.
+            item["line_total"] = 0
+            item["line_discount"] = 0
 
-        if r == "LEGO" and not is_gwp:
+        if r == "LEGO" and not is_gwp and item_status != "cancelled":
             if get_yes_no(
                 f"    Per-set multiplier override? (order default ×{lego_order_multiplier})"
             ):
@@ -191,12 +223,13 @@ def collect_line_items(retailer="", lego_order_multiplier=1):
             if get_yes_no("    Any bonus points on this set?"):
                 item["lego_bonus_points"] = get_int("    Bonus points (flat)", default="0")
 
-        if r == "WALMART" and not is_gwp:
+        if r == "WALMART" and not is_gwp and item_status != "cancelled":
             if get_yes_no("    Set-specific cash reward on this item?"):
                 item["walmart_set_cash_reward"] = get_float("    Cash reward ($)")
 
         items.append(item)
-        print(f"  Added: {set_name} x{quantity} @ ${unit_price:.2f}")
+        cancelled_flag = " [CANCELLED]" if item_status == "cancelled" else ""
+        print(f"  Added: {set_name}{cancelled_flag} x{quantity} @ ${unit_price:.2f}")
         if not get_yes_no("  Add another item?", default="y"):
             break
     return items
@@ -557,7 +590,8 @@ def print_summary(order, line_items, rewards_summary):
     print(f"  LINE ITEMS ({len(line_items)}):")
     for i, item in enumerate(line_items, 1):
         gwp_flag = " [GWP]" if item["is_gwp"] else ""
-        print(f"  {i}. {item['set_name']}{gwp_flag}")
+        cancelled_flag = " [CANCELLED]" if item.get("item_status") == "cancelled" else ""
+        print(f"  {i}. {item['set_name']}{gwp_flag}{cancelled_flag}")
         print(
             f"     Qty: {item['quantity']} | "
             f"Price: ${item['unit_price']:.2f} | "
@@ -567,6 +601,8 @@ def print_summary(order, line_items, rewards_summary):
             print(f"     Set #: {item['set_number']}")
         if not item.get("is_retiring", True):
             print(f"     Retiring: No")
+        if item.get("item_status") == "cancelled" and item.get("cancellation_reason"):
+            print(f"     Cancellation reason: {item['cancellation_reason']}")
     print("=" * 60)
 
 
@@ -629,6 +665,9 @@ def write_order(order, line_items, client):
             "line_total":   item["line_total"],
             "is_gwp":       item["is_gwp"],
             "is_retiring":  item.get("is_retiring", True),
+            "item_status":  item.get("item_status", "received"),
+            "cancellation_reason": item.get("cancellation_reason"),
+            "cancelled_at": item.get("cancelled_at"),
         })
 
     line_result = client.table("line_items").insert(line_item_rows).execute()
