@@ -119,12 +119,15 @@ def promote_row(client, row, purchase_date_val, purchase_price, source_platform,
     discount_pct = round((face_value - purchase_price) / face_value * 100, 2) if face_value else 0.0
 
     card = {
+        # discount_amount is a DB-generated column (face_value -
+        # purchase_price) -- caught 2026-09-15 while promoting the
+        # 130-card import queue; the insert fails outright if it's
+        # included here.
         "user_id": PHASE_1_USER_ID,
         "retailer": row["retailer"],
         "face_value": face_value,
         "purchase_price": purchase_price,
         "discount_pct": discount_pct,
-        "discount_amount": round(face_value - purchase_price, 2),
         "purchase_date": purchase_date_val.isoformat(),
         "remaining_balance": face_value,
         "status": "available",

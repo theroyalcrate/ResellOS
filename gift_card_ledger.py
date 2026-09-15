@@ -58,11 +58,23 @@ def get_yes_no(prompt, default="n"):
 
 
 def _load_active_cards(client):
+    # BUGFIX (2026-09-15, caught while promoting the 130-card import queue):
+    # every real writer of gift_cards.status -- agent_05_gift_cards.py,
+    # agent_07_cashback.py, and the ADR-030 review app's promote_row() --
+    # sets "available" on a new card, never "active" (that's just the
+    # column's schema-level default, applied by nothing in the actual code
+    # paths). "partial" is a card that still has a real remaining_balance
+    # after some spend. Filtering on status == "active" alone silently hid
+    # every card created through the normal entry paths (78 "available" +
+    # 13 "partial" rows, confirmed via direct query) from gift card debit
+    # picking -- so apply_gift_card_debit() would have shown Josh "no
+    # active gift cards" on almost every real order. "depleted" is
+    # correctly excluded already by remaining_balance > 0 regardless.
     result = (
         client.table("gift_cards")
         .select("card_id, retailer, card_number_last4, remaining_balance, status")
         .eq("user_id", PHASE_1_USER_ID)
-        .eq("status", "active")
+        .in_("status", ["active", "available", "partial"])
         .gt("remaining_balance", 0)
         .execute()
     )
