@@ -45,6 +45,7 @@ from datetime import date
 from typing import Optional
 
 from db_client import get_client, PHASE_1_USER_ID
+from gift_card_ledger import compute_gift_card_savings
 
 # GWP statuses that produce $0 proceeds immediately (no provisional window)
 _GWP_ZERO_STATUSES = ("retained_personal", "donated", "lost_damaged")
@@ -512,8 +513,21 @@ def mode_compute(client):
     gc_savings = 0.0
     if gc_applied > 0:
         print(f"\n  Layer 2 — Gift card face value applied: ${gc_applied:.2f}")
-        print("  Enter 0 if cards were purchased at face value (no savings).")
-        raw_savings = get_float("  Gift card savings ($)", default=0.0)
+        # ADR-031: read the real assignment(s) + each card's discount_pct
+        # instead of asking Josh to retype a raw dollar figure every run.
+        ledger_savings, ledger_detail = compute_gift_card_savings(order_id, client)
+        if ledger_detail:
+            print("  From the gift card ledger (ADR-031):")
+            for line in ledger_detail:
+                print(f"    {line}")
+            raw_savings = get_float(
+                "  Gift card savings ($) — override if this looks wrong",
+                default=ledger_savings,
+            )
+        else:
+            print("  No gift card ledger assignment found for this order (predates ADR-031,")
+            print("  or the card link was skipped). Enter 0 if cards were purchased at face value.")
+            raw_savings = get_float("  Gift card savings ($)", default=0.0)
         gc_savings = round(max(raw_savings or 0.0, 0.0), 2)
         if gc_savings > 0:
             print(f"  Gift card savings: ${gc_savings:.2f}")

@@ -11,6 +11,7 @@ Usage: python agent_02_order_entry.py
 from datetime import date
 from db_client import get_client, PHASE_1_USER_ID
 from order_validators import run_all_checks, print_warnings
+from gift_card_ledger import apply_gift_card_debit
 
 # --- Rewards constants ---
 LEGO_POINTS_PER_DOLLAR   = 6.5
@@ -678,6 +679,20 @@ def write_order(order, line_items, client):
         return False
     print(f"  OK: {len(line_result.data)} line item(s) written")
 
+    # ADR-031 / DECISION 017: the gift card ledger atomic write. Only fires
+    # when this order is being written as "confirmed" -- capture_queue_promotion
+    # also calls write_order() but always writes "pending_review" (Josh hasn't
+    # signed off on final numbers yet), so no card gets debited until this
+    # order is actually confirmed, either here or later via
+    # order_lifecycle.confirm_order().
+    if order.get("order_status") == "confirmed":
+        gift_card_applied = float(order.get("gift_card_applied") or 0)
+        if gift_card_applied > 0:
+            apply_gift_card_debit(
+                order_id, order["retailer"], gift_card_applied, client,
+                order_number=order["order_number"],
+            )
+
     print("\n" + "=" * 60)
     print("  ORDER SAVED SUCCESSFULLY")
     print(f"  Order ID:    {order_id}")
@@ -692,6 +707,18 @@ def write_order(order, line_items, client):
 # --------------------------------------------------------------------------- #
 
 def main():
+    print("\n" + "=" * 60)
+    print("  RESELLOS -- AGENT 02: ORDER ENTRY")
+    print("=" * 60)
+    print("  1. New order entry")
+    print("  2. Reopen / edit / re-confirm an existing order")
+    print("     (fix a mistake, or credit a gift card back after a partial cancellation)")
+    choice = get_input("  Choice", default="1")
+    if choice == "2":
+        import order_lifecycle
+        order_lifecycle.main()
+        return
+
     order, line_items, rewards_summary, client = collect_order()
     print_summary(order, line_items, rewards_summary)
 
