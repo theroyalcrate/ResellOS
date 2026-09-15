@@ -250,12 +250,24 @@ def get_yes_no(prompt, default="n"):
 # --------------------------------------------------------------------------- #
 
 def fetch_gift_cards_for_retailer(client, retailer):
+    # BUGFIX (2026-09-15, same root cause found in gift_card_ledger.py):
+    # every real writer of gift_cards.status -- agent_05_gift_cards.py,
+    # agent_07_cashback.py, the ADR-030 review app -- sets "available" on
+    # a new card, never "active" (the schema's column default, never
+    # actually applied by any insert path). "partial" is a card that
+    # still has a real remaining_balance after some spend. Filtering on
+    # status == "active" alone silently hid every card created through
+    # the normal entry paths from this planner. Added the balance filter
+    # too, matching gift_card_ledger.py's convention, since "depleted"
+    # cards (remaining_balance == 0) have no business showing up here
+    # regardless of status.
     result = (
         client.table("gift_cards")
         .select("card_id, remaining_balance, status, card_number_last4")
         .eq("user_id", PHASE_1_USER_ID)
         .ilike("retailer", retailer)
-        .eq("status", "active")
+        .in_("status", ["active", "available", "partial"])
+        .gt("remaining_balance", 0)
         .order("remaining_balance", desc=True)
         .execute()
     )
