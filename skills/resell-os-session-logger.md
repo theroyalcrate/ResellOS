@@ -1,358 +1,320 @@
 ---
 name: resell-os-session-logger
 description: >
-  Maintains the ResellOS Session Log and CONTEXT.md across both VS Code build sessions and
-  planning/vault sessions. Use this skill whenever the user says "update the session log",
-  "log this session", "wrap up the session", "what should I add to the log", "close out the
+  Maintains ResellOS's two living docs — SESSION_LOG.md and CONTEXT.md, both plain markdown
+  in the repo root — across build sessions (Claude Code, Cowork) and planning/vault sessions
+  (plain chat-Claude). Use this skill whenever the user says "update the session log", "log
+  this session", "wrap up the session", "what should I add to the log", "close out the
   session", "generate the Claude Code prompt", or "write up the session". Also trigger at the
-  START of any session when the user says "read the session log", "what did we do last time",
-  or "where did we leave off" — in that case, READ the log and summarize it; don't update yet.
-  Two session types handled: (1) VS Code build sessions — update the HTML session log file
-  directly. (2) Planning/vault/CPA sessions — produce a ready-to-paste Claude Code prompt
-  that updates CONTEXT.md and SESSION_LOG.md. The skill detects which type from context and
-  routes accordingly. Never ask the user which type — infer it.
+  START of any session when the user says "read the session log", "what did we do last
+  time", or "where did we leave off" — in that case, READ the docs and summarize; don't
+  update yet. Two protocols, chosen by which surface the current session can write from, not
+  by what kind of work was done: (1) a surface with direct local-file/GitHub write access
+  (Claude Code, Cowork) edits SESSION_LOG.md and CONTEXT.md directly. (2) a read-only surface
+  (plain chat-Claude on claude.ai) produces a ready-to-paste Claude Code prompt instead. The
+  skill detects which applies from context. Never ask the user which — infer it.
 ---
 
 # ResellOS Session Logger
 
-Maintains the living Session Log and CONTEXT.md so every session starts with accurate context
-and ends with an honest record of what was completed, what was decided, and what comes next.
+Maintains `SESSION_LOG.md` and `CONTEXT.md` — both plain markdown files in the repo root —
+so every session starts with accurate context and ends with an honest record of what was
+found, what was fixed, what was decided, and what comes next.
+
+**There is no HTML session log.** An older version of this skill described updating a
+`ResellOS___Session_Log.html` file with named zones (`header-meta`, `session-card`,
+`next-callout`, etc.). That file does not exist in this repo — the project moved to plain
+markdown at some point and this skill was never updated to match, which meant a 2026-09-17
+Claude Code session had to ignore its instructions entirely and reverse-engineer the current
+convention from the existing 2026-09-14/09-15 `SESSION_LOG.md` entries instead. This version
+replaces those instructions with the real, current process. If you ever find yourself being
+told to write an HTML file for this project, stop and re-read this skill — the instruction is
+stale.
+
+**Where things live (repo root, `theroyalcrate/ResellOS`):**
+- `SESSION_LOG.md` — single source of truth for build state, updated at the end of every
+  session. Read first, before opening VS Code.
+- `CONTEXT.md` — durable project orientation: architecture decisions, business logic, known
+  gaps, open questions. Read second.
+- `references/*.md` — reusable techniques or designs worth documenting on their own (e.g. a
+  detection method, a parser spec) that don't belong inside either log.
+- `ADR-XXX-*.md` (repo root) — standalone architecture decision records for a single big
+  decision, written when a change is significant enough to warrant its own document rather
+  than a paragraph in CONTEXT.md.
+
+There is no project-knowledge paste-in anymore (deleted 2026-06-21 per SESSION_LOG.md's
+"Document home & sync rule") — this repo is the only copy, always.
 
 ---
 
 ## When to READ vs UPDATE
 
-**READ mode** — triggered by:
-- "Where did we leave off?"
-- "What did we do last time?"
-- "Catch me up"
-- Start of a session before opening VS Code
+**READ mode** — triggered by "where did we leave off", "what did we do last time", "catch me
+up", or the start of any session before touching code.
 
-→ Pull the Session Log from GitHub. Summarize: current sprint position, next session goal,
-any open questions or blockers. Do NOT update anything yet.
+→ Read SESSION_LOG.md's "Start Here — Next Session" section (the dated pointer paragraphs,
+newest first) and the most recent "Session History" card. Skim CONTEXT.md's "Open Questions"
+for anything that needs a decision before work begins. Summarize as a brief spoken briefing —
+don't dump the raw text. Do NOT update anything yet.
 
-**UPDATE mode** — triggered by:
-- "Update the session log"
-- "Log this session"
-- "Wrap up" / "Close out the session"
-- "Generate the Claude Code prompt"
-- "Write up the session"
-- End of any session — VS Code build or planning/vault
+**UPDATE mode** — triggered by "update the session log", "log this session", "wrap up" /
+"close out the session", "generate the Claude Code prompt", "write up the session", or simply
+finishing a session's work.
 
-→ Detect session type (see below), then follow the matching protocol.
+→ Detect which protocol applies (below), then follow it.
 
 ---
 
-## SESSION TYPE DETECTION
+## WHICH PROTOCOL APPLIES
 
-Before doing anything else, determine which type of session just ended. Do NOT ask — infer
-from conversation context.
+Decide by **write access this session actually has**, not by what kind of work was done —
+per CLAUDE.md's "Tool Access Reality" table:
 
-**VS Code build session** signals:
-- Code was written, reviewed, or committed
-- Migrations were run
-- Agents were built or modified
-- A commit message exists or was discussed
-- GitHub repo files were changed
+- **Claude Code or Cowork** — both can read/write the local repo directly and commit to
+  GitHub (Cowork can also reach Supabase directly). → **DIRECT-WRITE PROTOCOL.**
+- **Plain chat-Claude (claude.ai)** — can read GitHub via MCP but cannot write local files or
+  run code. This is typically where pure planning/vault/CPA-prep sessions with no code
+  changes happen. → **PROMPT-HANDOFF PROTOCOL.**
 
-→ Follow: VS CODE BUILD SESSION PROTOCOL
-
-**Planning / vault / CPA session** signals:
-- Vault notes were built (retailer interviews, knowledge docs)
-- Architecture decisions were discussed or confirmed
-- CPA/accounting questions were worked through
-- Open questions were resolved or added
-- No code was written, no commits made
-
-→ Follow: PLANNING/VAULT SESSION PROTOCOL
-
-If a session had BOTH (e.g. vault work + a quick schema fix committed) — run the
-PLANNING/VAULT PROTOCOL first to produce the Claude Code prompt, then note the VS Code
-work inside that prompt's SESSION_LOG.md entry. Do not run both protocols separately.
+If a session had both planning work and a quick code change (e.g. vault work plus a schema
+fix committed from Claude Code), just follow the DIRECT-WRITE PROTOCOL once, covering
+everything in one pass — don't run both protocols separately.
 
 ---
 
-## VS CODE BUILD SESSION PROTOCOL
+## DIRECT-WRITE PROTOCOL (Claude Code / Cowork)
 
 ### Step 1 — Gather what happened
 
-Ask (or pull from conversation context) if not already known:
+From conversation context (or by asking, if genuinely unclear):
 
-1. **Session ID** — what was the session number? (e.g. S10)
-2. **Date** — today's date
-3. **What was completed** — list of specific things that now work and are committed to GitHub
-4. **What was deferred** — things attempted but not finished, or descoped
-5. **Commit message** — exact commit message used (ask if not stated)
-6. **Did any architecture decisions change?** — new tables, changed approach, reversed decision
-7. **What is the next session goal?** — one sentence
+1. What was found, built, fixed, or decided — specific and honest, not "worked on X"
+2. What's still open or deferred — never drop these, carry them forward
+3. Any commit(s) made — exact message and hash, if committed
+4. Whether any architecture decision changed, or a new durable gap/limitation was found
+5. One-sentence next-session goal
 
-If the user says "just write it up" or "you know what we did" — infer from conversation
-history and confirm before writing.
+### Step 2 — Update SESSION_LOG.md
 
-### Step 2 — Identify what needs to change in the HTML
+Real current structure, top to bottom — update whichever of these actually changed:
 
-The Session Log HTML file (ResellOS___Session_Log.html) has these key zones:
+| Section | What it holds | Update when |
+|---|---|---|
+| Header table (`Last Updated`, `Next Session`) | Current date; a detailed paragraph on the standing next priority | Every session |
+| `## Start Here — Next Session` | A stack of dated blockquote pointers, newest first, each starting `> **YYYY-MM-DD update — ...`, often explicitly marking older paragraphs below it as stale | Every session — add one new pointer at the top; never delete the older ones, they're the stale-marking trail |
+| `## Current Sprint` / status-board table | One terse row per session: `\| Cowork/Claude Code YYYY-MM-DD \| one-paragraph summary \| ✓ Complete \|` | Every session — add a new row |
+| `## Database — Current State` | Bulleted live counts (tables, orders, gift cards, etc.) | Only when a bullet's number is now stale — update the number and note what changed and why, don't just overwrite silently |
+| `## Session History` | Full narrative cards, newest first: `### Cowork/Claude Code YYYY-MM-DD — Title ✓ Done — YYYY-MM-DD` followed by prose paragraphs with **bold lead-ins** per topic | Every session — add one new card at the top of this section (right after the `## Session History` heading, before the previous newest card) |
+| `## Architecture Doc Corrections` | `OVERRIDE NNN` blocks — only when a previously-documented decision is now known to be wrong | Rare — only on a real reversal |
+| `## Known Bugs / Build TODOs (session-level)` | Small, non-architecture bugs/TODOs only | Rare — see the note already in that section: architecture-level items go to CONTEXT.md instead (consolidated 2026-09-06) |
 
-| Zone | What it contains | When to update |
-|------|-----------------|----------------|
-| `header-meta` | Last Updated date, Sessions Complete range, Next Session ID, Phase | Every session |
-| `next-callout` | Next session goal and step-by-step plan | Every session — replace entirely |
-| `status-board` | Sprint rows with status pills | Update completed sessions to `pill-done`, advance `pill-next` |
-| `session-card` blocks | One card per session with full detail | Add new card for the session just completed |
-| `override` blocks | Architecture corrections | Add one if a decision changed |
-| `open questions` | Unresolved blockers and ADRs | Add, remove, or update as needed |
+**Session History card — real template** (see the 2026-09-17 entry as a worked example):
 
-### Step 3 — Write the updates
+```markdown
+### Cowork 2026-09-17 — Found & Fixed: <short title> ✓ Done — 2026-09-17
 
-Produce the exact HTML changes needed. For each change:
-- State which zone is being updated
-- Show the old content (brief) and new content (full)
-- For new session cards: use the existing card HTML structure as a template
+<One-paragraph lead-in: what triggered the investigation.>
 
-**Session card template:**
-```html
-<div class="session-card open">
-  <div class="sc-header" onclick="this.parentElement.classList.toggle('open')">
-    <div class="sc-num">SXX</div>
-    <div class="sc-title">[Title] <span class="tag tag-done">✓ Done</span></div>
-    <div class="sc-date">YYYY-MM-DD</div>
-    <div class="sc-chevron">▾</div>
-  </div>
-  <div class="sc-body">
-    <div class="sc-section">
-      <div class="sc-section-label">What Was Built</div>
-      <ul class="sc-list">
-        <li class="done">[completed item]</li>
-        <li class="warn">[partial / deferred item]</li>
-        <li class="blocked">[blocked item]</li>
-      </ul>
-    </div>
-    <div class="sc-section">
-      <div class="sc-section-label">Commit Message</div>
-      <div class="sc-code">[exact commit message]</div>
-    </div>
-  </div>
-</div>
+**The bug/finding.** <What's actually wrong or true, and why nothing existing caught it.>
+
+**<Technique/method>, if one was used.** <How it was detected, verified — including any
+false positives ruled out, since honesty about what didn't turn out to be a bug matters as
+much as what did.>
+
+**<Fixes/decisions made> (be specific — order numbers, file names, commit hashes, before →
+after values).**
+
+**What's still open.** <What wasn't done this session — no code fix, no automation, extending
+to other cases, etc. Point at the CONTEXT.md open question if one was added.>
 ```
 
-**Status pill classes:**
-- `pill-done` — complete and committed
-- `pill-partial` — attempted, flaw found, or not finished
-- `pill-next` — the very next session to run
-- `pill-upcoming` — planned but not yet started
+Match the prose style already in the file — dense paragraphs with **bold** lead-ins per
+sub-topic, not bullet-only telegraphic notes. Specific numbers (order IDs, dollar amounts,
+row counts) over vague summaries.
 
-**Sprint row status note pattern:**
-```html
-<span class="note">[One sentence of key facts — what was done, what changed, what was deferred]</span>
-```
+### Step 3 — Decide whether CONTEXT.md also needs an update
 
-**Override block template (use when a decision reversed or an architecture doc is now wrong):**
-```html
-<div class="override">
-  <div class="override-header">
-    <div class="override-id">OVERRIDE XXX — [Topic]</div>
-    <div class="override-date">YYYY-MM-DD</div>
-  </div>
-  <div class="override-body">[Explanation of what changed and why]</div>
-  <div class="override-old">[What the old docs say — quoted or paraphrased]</div>
-  <div class="override-new">[What is now true]</div>
-</div>
-```
+This is the judgment call this skill most needs to get right. Ask: **will this still matter
+to someone reading CONTEXT.md six months from now, without today's conversation for
+context?**
 
-### Step 4 — Confirm with the user
+**Goes in CONTEXT.md** (durable — survives independent of any one session's narrative):
+- A new architecture decision, or a locked decision that got confirmed/reversed → add to
+  `## Architecture Decisions Already Made`, or write a full `ADR-XXX-*.md` if it's big enough
+  to need its own rationale/consequences document.
+- A newly-discovered **known gap or limitation** in a tool/agent that isn't fixed yet and
+  would otherwise silently recur → add a new numbered item under `## Open Questions
+  (Unresolved)`. Follow the file's own convention: number it one past the last existing item,
+  write the finding in full (context, what was found, what was fixed vs. still open, pointers
+  to any reference doc or session entry with more detail). When a question is later resolved,
+  don't delete it — strike it (`~~...~~`) and prepend `✅ RESOLVED YYYY-MM-DD`, keeping the
+  original text below for context (see item 21 as a worked example of this pattern).
+- A retailer-specific or domain business-logic rule that will apply again later → `## Known
+  Edge Cases Already Designed For`.
+- A reusable technique or method (a detection script, a parsing approach) that's likely to be
+  reused or re-run later → its own file under `references/`, cross-linked from wherever in
+  CONTEXT.md/SESSION_LOG.md is relevant, rather than buried only in a session's prose.
 
-Before writing the file, show:
-1. A plain-English summary of what you're adding/changing (2-4 bullet points)
-2. Ask: "Does this look right? Anything I'm missing?"
+**Stays in SESSION_LOG.md only** (session-specific, narrative, or still in flux):
+- What was investigated and found NOT to be a bug (false positives, confirmed-fine cases) —
+  useful history, not a durable fact about the system.
+- In-progress work, partial fixes, "still needs testing" items.
+- The blow-by-blow of how something was found or debugged, once the durable takeaway has
+  been distilled into a CONTEXT.md entry.
+- Anything that's really just "next session should do X" — that belongs in the header table's
+  `Next Session` cell and/or a `Start Here` pointer, not CONTEXT.md, unless it also represents
+  a standing gap worth documenting independent of the to-do (in which case it may be both).
 
-Only write the file after the user confirms.
+If in doubt, write it in SESSION_LOG.md fully either way (that file is guaranteed to get
+read), and only promote the durable kernel of it into CONTEXT.md.
 
-### Step 5 — Write the updated file
+### Step 4 — Confirm before writing (light touch)
 
-Apply all changes to the HTML. The file lives at:
-```
-ResellOS___Session_Log.html
-```
+For anything with real ambiguity (unclear scope, an architecture-level call), summarize the
+planned SESSION_LOG.md/CONTEXT.md changes in 2-4 bullets and check before writing. Skip this
+when the session's own request already specifies the content precisely — documentation edits
+are easy to review afterward via a normal diff, so this isn't a hard gate the way it would be
+for code.
 
-(In Claude.ai, present the updated file for download. In VS Code / Claude Code, write it
-to the project root or wherever the other ResellOS HTML docs live.)
+### Step 5 — Write the files
 
-### Step 6 — Close out
+Edit `SESSION_LOG.md` and `CONTEXT.md` directly in the repo root.
 
-Tell the user:
-- What was updated
-- What the next session number and goal is
-- One reminder if there's anything to check before starting next time
+### Step 6 — Committing is a separate decision, not part of this skill
+
+Writing these files is a file edit, not a commit. **Do not `git commit`/`push` unless the
+user explicitly asks**, even though CLAUDE.md's "When a Session Ends" ritual describes
+committing the log update as one of the closing steps — that ritual describes what *should*
+eventually happen at the end of a session, not a standing authorization to commit without
+being asked. Default to: write the files, then tell the user what changed and ask whether
+they want it committed. (This distinction is exactly why this rewrite exists — a prior
+session got asked to update the log with no accompanying "commit and push" instruction and
+should not assume one.)
+
+### Step 7 — Close out
+
+Tell the user, in plain language:
+- Which files changed and what was added (a short list, not the full diff)
+- The next-session pointer, in one sentence
+- Whether they want it committed (per Step 6)
 
 ---
 
-## PLANNING/VAULT SESSION PROTOCOL
+## PROMPT-HANDOFF PROTOCOL (plain chat-Claude, no local/GitHub write access)
 
-Used when a session involved decisions, vault notes, CPA prep, or design work — but no
-VS Code code commits. Output is a ready-to-paste Claude Code prompt, not an HTML file write.
+Used when the current session can't write files or push to GitHub itself — typically a
+planning/vault/CPA-prep session on claude.ai. Output is a ready-to-paste prompt for a
+direct-write surface (Claude Code or Cowork) to execute Steps 2-5 above, not a file write.
 
 ### Step 1 — Gather what happened
 
-Pull from conversation history. Confirm anything unclear. Collect:
+Same information as the direct-write protocol's Step 1, plus: any vault notes produced, any
+CPA/external question sent or answered, any new open question or schema item identified.
 
-1. **Date** — today's date
-2. **Session type** — planning / vault / CPA prep / mixed (label honestly)
-3. **Vault notes completed** — for each: retailer/topic name, key findings, architecture
-   implications found, files produced
-4. **Architecture decisions confirmed** — decisions that were already locked but are now
-   evidence-based (e.g. `rewards_reduce_taxable_base` verified against invoice)
-5. **Architecture decisions changed or reversed** — anything that was "locked" but proved
-   wrong; must propagate to CONTEXT.md and Architecture Doc
-6. **Open questions resolved** — which OQ number, what the resolution was
-7. **New open questions added** — description of each
-8. **New schema items needed** — new fields, tables, or migrations identified but not yet built
-9. **CPA/external items** — questions sent, answers received, decisions pending
-10. **Files produced** — vault notes, skills, docs created this session
-11. **Next session goal** — one sentence
-
-If the user says "just write it up" — infer everything from conversation history, then show
-a confirmation summary before producing the prompt.
-
-### Step 2 — Show confirmation summary
-
-Before producing the prompt, show a plain-English summary:
+### Step 2 — Show a confirmation summary
 
 ```
-Here's what I'm writing into the Claude Code prompt:
+Here's what I'll put in the Claude Code prompt:
 
 CONTEXT.md changes:
-• [bullet per change]
+• [bullet per change, or "none"]
 
 SESSION_LOG.md changes:
-• [one new session entry dated YYYY-MM-DD]
-• [open questions closed: OQ#X]
-• [new open questions: description]
+• One new Session History entry dated YYYY-MM-DD
+• [open questions closed / added, or "none"]
 
 Does this look right? Anything missing?
 ```
 
 Only produce the prompt after the user confirms.
 
-### Step 3 — Produce the Claude Code prompt
+### Step 3 — Produce the prompt
 
-Generate a complete, ready-to-paste prompt for Claude Code. The prompt must:
-
-1. Instruct Claude Code to read CONTEXT.md and SESSION_LOG.md from GitHub first
-2. List every CONTEXT.md change as a specific named instruction (not vague)
-3. Include the full SESSION_LOG.md entry as a block to append
-4. Instruct Claude Code to write both files back
-5. Ask Claude Code to confirm with line count and last-updated timestamp on each file
-
-**Prompt template:**
-
-```
-Read the current CONTEXT.md and SESSION_LOG.md from the GitHub repo
-(theroyalcrate/ResellOS), then apply the following updates and write both files back.
-
-**CONTEXT.md updates:**
-
-[Numbered list of specific changes. Each item names the section, the old state briefly,
-and the exact new content. Be precise — vague instructions cause drift.]
-
-**SESSION_LOG.md — append this entry:**
-
-SESSION: [DATE] ([Session type])
-TYPE: [Planning / Vault / CPA prep / Mixed]
-
-COMPLETED:
-- [bullet per completed item — specific, honest]
-
-OPEN ITEMS CLOSED:
-- [OQ number and resolution, or "none"]
-
-NEW OPEN ITEMS:
-- [description of each new question]
-
-NEW SCHEMA ITEMS IDENTIFIED (not yet built):
-- [field/table/migration needed, or "none"]
-
-FILES PRODUCED THIS SESSION:
-- [filename — description, save location]
-
-NEXT SESSION ([next session ID if known]):
-- [one sentence goal]
-
----
-
-After writing both files, confirm the line count and last-updated timestamp on each
-so I can verify the writes landed correctly.
-```
+The prompt must:
+1. Instruct Claude Code to read the current SESSION_LOG.md and CONTEXT.md from the repo
+   (`theroyalcrate/ResellOS`) first — never assume their prior state
+2. List every CONTEXT.md change as a specific, named instruction (section, old state briefly,
+   exact new content) — vague instructions cause drift
+3. Include a complete Session History card (using the template above) to add to SESSION_LOG.md
+4. Follow the same "what belongs where" guidance from the direct-write protocol's Step 3
+5. Explicitly say: write the files, then report back and ask before committing — don't commit
+   automatically
+6. Ask for confirmation (line count / a short excerpt) once done, so the handoff can be
+   verified
 
 ### Step 4 — Present the prompt
 
-Output the prompt in a code block so it's easy to copy. Add one line after:
-"Paste this into Claude Code to update both files."
+Output it in a code block, ready to copy. Add a line after: "Paste this into Claude Code (or
+hand it to a Cowork session) to apply these updates."
 
 ---
 
-## RULES (apply to both session types)
+## RULES (apply to both protocols)
 
-**Never mark something done if it wasn't committed to GitHub.**
-"Works locally" is not done. "We decided it" is not done — it's a pending decision.
+**Never mark something done if it isn't actually committed/verified.** "Works locally" or
+"wrote the code" is not the same as "committed" — say which one is true.
 
-**Never remove deferred items — move them.**
-If something was deferred, record it in the session entry. Don't delete it.
+**Never remove deferred items — carry them forward.** If something was deferred, it stays
+visible in the next relevant entry until it's actually resolved.
 
-**One next session at a time.**
-The `next-callout` block (HTML) and the NEXT SESSION line (markdown prompt) always
-contain exactly one session's goal.
+**One next-session goal at a time.** The header table's `Next Session` cell and the top
+`Start Here` pointer should each name one clear next priority, even if the surrounding prose
+is long.
 
-**Architecture overrides accumulate — don't delete old ones.**
-Each override is a record of what changed and when.
+**Architecture overrides and resolved-open-questions accumulate — never delete history.**
+Strike through and mark resolved; don't erase.
 
-**Open questions: be conservative about closing them.**
-Only close a question if it was definitively resolved with evidence or a committed decision.
-"We talked about it" is not resolved. "CPA confirmed X" is resolved.
+**Be conservative about marking an Open Question resolved.** "We talked about it" isn't
+resolution. "Confirmed via X" or "built and verified" is.
 
-**Dates matter.**
-Always record the actual date of the session, not an approximation.
+**Dates matter — always record the actual session date**, not today's date if they differ
+(e.g. a session logged after the fact).
 
-**For vault sessions — flag architecture bugs found.**
-Every vault session is a potential bug-finding exercise. If a session overturns a locked
-decision (e.g. rewards_reduce_taxable_base), that must appear in CONTEXT.md changes AND
-as a named override in the HTML session log when the next VS Code session runs.
-
----
-
-## Reading the Log at Session Start
-
-When the user starts a session and asks where they left off:
-
-1. Read the `next-callout` block — this is the session goal
-2. Read the most recent session card — this is what was last done
-3. Check open questions for anything that needs a decision before work begins
-4. Check the database stats — remind the user to verify live DB state before writing code
-
-Deliver as a brief spoken briefing, not a list. Example:
-
-> "Last session you finished the Kohl's vault note and confirmed `rewards_reduce_taxable_base = true`.
-> The CONTEXT.md and SESSION_LOG.md were updated via Claude Code. Next up is S10: variable-earn
-> schema for Kohl's, pin the earn cliff against the June 8th orders. Before you open VS Code,
-> verify the Kohl's retailer_profiles row is seeded correctly in Supabase."
+**Every session is a potential bug-finding session, not just build sessions.** If a planning
+or data-review session overturns a locked decision or finds a real gap, that belongs in
+CONTEXT.md via the Prompt-Handoff protocol just as much as a build session would via the
+direct-write one.
 
 ---
 
-## Session Log Document Structure (Reference)
+## Reading the log at session start (example briefing)
+
+> "Last session (2026-09-17) found a real bug: `agent_1e_pdf_backfill` can silently drop an
+> entire shipment on a multi-box order, and no existing validator catches it. Six orders were
+> corrected via direct SQL, one was rebuilt from scratch. No code was fixed — that's still
+> open, tracked as CONTEXT.md Open Question #22. Standing next priority underneath that:
+> `order_confirm_review_app.py` is built and safe to run against the 665-order
+> `pending_review` backlog, just not run against production yet."
+
+Pull that from: the newest `Start Here` pointer, the newest `Session History` card, and a scan
+of CONTEXT.md's `Open Questions` for anything needing a decision before new work starts.
+
+---
+
+## Document structure (reference)
 
 ```
-ResellOS___Session_Log.html  (VS Code sessions)
+SESSION_LOG.md  (repo root, markdown)
 │
-├── Header — metadata (last updated, next session, phase)
-├── Start Here — Next Session (callout + pre-session checklist)
-├── Current Sprint — status board (all sessions with pills)
-├── Database — Current State (live stats)
-├── Architecture Doc Corrections (override blocks)
-├── Session History (expandable cards, newest first)
-├── Open Questions (unresolved blockers and ADRs)
-└── How to Use This Document (protocol reminder)
+├── Header table — Last Updated / Sessions Complete / Next Session / Phase / GitHub
+├── Start Here — Next Session (stacked dated pointers, newest first)
+├── Current Sprint — status-board table (one terse row per session)
+├── Database — Current State (live count bullets)
+├── Session History (full narrative cards, newest first)
+├── Architecture Doc Corrections (OVERRIDE blocks, rare)
+├── Known Bugs / Build TODOs (session-level only — architecture items live in CONTEXT.md)
+└── How to Use This Document
 
-SESSION_LOG.md  (planning/vault sessions — updated via Claude Code prompt)
+CONTEXT.md  (repo root, markdown)
 │
-└── Chronological session entries, newest appended at bottom
-    Each entry: date, type, completed, closed OQs, new OQs, schema items, files, next goal
+├── What ResellOS Is / tech stack / build state
+├── Key Business Logic
+├── Known Edge Cases Already Designed For
+├── Planned Future Systems (Not Yet Built)
+├── Architecture Decisions Already Made (Do Not Reverse Without Flagging)
+├── Open Questions (Unresolved) — numbered, strike + ✅ RESOLVED when closed
+└── Document Hierarchy — What Supersedes What
+
+references/*.md — standalone reusable techniques/specs, cross-linked from the above
+ADR-XXX-*.md — standalone decision records for single large decisions
 ```
