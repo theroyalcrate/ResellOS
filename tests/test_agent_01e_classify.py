@@ -26,6 +26,7 @@ from agent_01e_pdf_order_backfill import (
     _build_raw_data,
     _unmerged_invoice_pairs,
     _invoice_to_shipment_meta,
+    _relocation_target,
 )
 
 
@@ -271,3 +272,27 @@ def test_invoice_to_shipment_meta_carries_all_fields():
     assert meta["tax_amount"] == 22.66
     assert meta["payment_method"] == "Visa ...3013"
     assert meta["shipment_status"] == "received"
+
+
+# --------------------------------------------------------------------------- #
+# _relocation_target -- file relocation added 2026-09-19 (Task A). Pure
+# logic only -- no real Drive connection needed. resolve_retailer_folder/
+# resolve_drive_folder_path/build_filename are agent_01b_invoice_filing.py's
+# own, already covered by tests/test_agent_01b_pure_logic.py -- these tests
+# only cover how agent_01e composes them, not their own internals.
+# --------------------------------------------------------------------------- #
+
+def test_relocation_target_no_suffix_for_shipment_1():
+    folder_path, filename = _relocation_target("T450671168", "2026-09-01", 1)
+    assert folder_path == ["Invoices", "Lego", "2026", "September 2026"]
+    assert filename == "T450671168_LEGO_2026-09-01.pdf"
+
+
+def test_relocation_target_suffix_for_shipment_2():
+    _, filename = _relocation_target("T450671168", "2026-09-01", 2)
+    assert filename == "T450671168_LEGO_2026-09-01_ship2.pdf"
+
+
+def test_relocation_target_folder_path_reflects_order_year_and_month():
+    folder_path, _ = _relocation_target("T1", "2025-12-03", 1)
+    assert folder_path == ["Invoices", "Lego", "2025", "December 2025"]

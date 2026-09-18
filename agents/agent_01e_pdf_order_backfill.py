@@ -90,14 +90,48 @@ WHAT THIS AGENT DOES NOT DO:
   - Never sets order_status to anything but 'pending_review'.
   - Never triggers the cost basis engine.
 
+FILE RELOCATION (added 2026-09-19): a clean new order (CLEAN, via
+auto_promote()) or a confirmed match against an existing order (ORDER_EXISTS,
+zero discrepancy) now also moves its source PDF(s) out of
+Invoices/Lego/_unmatched/ into the correct Invoices/Lego/{Year}/{Month
+Year}/ folder, renamed to the standard {order_number}_LEGO_{date}.pdf
+convention (_ship{N} suffix for split shipments) -- reusing
+agent_01b_invoice_filing.py's resolve_retailer_folder()/
+resolve_drive_folder_path()/resolve_folder_id() rather than duplicating that
+logic (see _relocate_group_files()). This ALWAYS happens strictly after the
+DB write (capture_queue/order write, _link_invoice_files) has already
+succeeded -- a Drive hiccup on this last step never undoes or blocks the DB
+write, it just leaves the physical file sitting in _unmatched/ for later
+manual tidying (safe; invoice_files.order_id, already set, is what actually
+matters for correctness). A FLAGGED, DISCREPANCY, or FLAGGED_UNPARSEABLE
+outcome never relocates its file -- only a genuinely confirmed-good result
+does.
+
+EXCLUDED FILES (added 2026-09-19, migration 022): some backlog files will
+NEVER resolve into a real order match no matter how many times this agent
+re-scans them -- e.g. a file that isn't a LEGO.com order at all (a receipt
+from a different retailer, a LEGO Insiders points-history screenshot, a
+donation receipt), or a real LEGO purchase that's already tracked elsewhere
+(Brickprobe) in a retailer/format this agent doesn't handle. Rather than
+let these get re-downloaded and re-parsed forever,
+`invoice_files.excluded_reason` marks a row as permanently dismissed --
+`fetch_backlog_rows()` filters on it being null. Setting this is a manual,
+one-off judgment call (there's no automated way to detect "this will never
+be an order") -- it never touches the underlying Drive file, only the
+ledger row, so an exclusion is always reversible by clearing the column by
+hand if a file is ever found to have been excluded wrongly. See
+migrations/022_invoice_files_excluded_reason.sql.
+
 Modes:
   1 — Preview : scan the backlog, parse + classify every order_number
                 group, print the plan and outcome counts. No writes
-                anywhere -- not to orders, capture_queue, or invoice_files.
+                anywhere -- not to orders, capture_queue, invoice_files, or
+                Drive.
   2 — Run     : execute the plan from Mode 1 (writes capture_queue rows for
                 everything, auto-promotes clean new orders, flags
                 discrepancies against existing orders, links invoice_files
-                where safe).
+                where safe, relocates the source PDF(s) for a clean write
+                or confirmed match -- see FILE RELOCATION above).
   3 — Report  : summarize the current capture_queue state for this
                 agent's rows (source = agent_1d_pdf_backfill) --
                 how many promoted vs. still pending review, with reasons.
@@ -152,6 +186,10 @@ from agent_01b_invoice_filing import (                           # noqa: E402
     build_business_services,
     get_input,
     get_yes_no,
+    build_filename,
+    resolve_retailer_folder,
+    resolve_drive_folder_path,
+    resolve_folder_id,
 )
 from agent_01d_drive_historical_backfill import download_pdf_bytes  # noqa: E402
 
@@ -176,6 +214,14 @@ def fetch_backlog_rows(client) -> list[dict]:
     folder that still has no order linked. Paginated -- the backlog is
     comfortably under Supabase's default page size today but this agent
     is meant to be safe to re-run indefinitely, so don't silently cap it.
+
+    Excludes any row with `excluded_reason` set (migration 022, added
+    2026-09-19) -- a permanent, manually-judged dismissal for a file that
+    will never resolve into a real order match (not a LEGO.com order at
+    all, or a real purchase already tracked elsewhere) -- see this module's
+    EXCLUDED FILES docstring section above. Requires migration 022 to have
+    been applied to the live database first; querying a column that
+    doesn't exist yet would fail this call entirely.
     """
     rows: list[dict] = []
     page_size = 1000
@@ -189,6 +235,7 @@ def fetch_backlog_rows(client) -> list[dict]:
             .like("gmail_message_id", f"{LEDGER_KEY_PREFIX}%")
             .not_.is_("drive_file_id", "null")
             .is_("order_id", "null")
+            .is_("excluded_reason", "null")
             .range(offset, offset + page_size - 1)
             .execute()
         )
@@ -590,13 +637,140 @@ def _link_invoice_files(plan: InvoiceGroupPlan, order_id: Optional[str], client)
 
 
 # --------------------------------------------------------------------------- #
+# File relocation: move a group's source PDF(s) out of _unmatched/ once its
+# DB write has succeeded (added 2026-09-19). Reuses agent_01b_invoice_filing.py's
+# own retailer-folder/date-path/folder-id resolution rather than duplicating
+# it -- this agent only adds the actual Drive move + the invoice_files
+# filename update on top.
+# --------------------------------------------------------------------------- #
+
+def _relocation_target(order_number: str, order_date_iso: str, shipment_num: int) -> tuple[list[str], str]:
+    """Pure logic: where a group's PDF should end up once it's confirmed
+    good -- the Drive folder path segments and the standard filename. Split
+    out from _relocate_group_files() so it's unit-testable without a real
+    Drive connection. LEGO-only (this agent never handles another
+    retailer), so resolve_retailer_folder()'s sender_email discriminator
+    (only relevant for Walmart vs Walmart Business) is passed empty."""
+    retailer_folder = resolve_retailer_folder("LEGO", sender_email="")
+    folder_path = resolve_drive_folder_path(retailer_folder, order_date_iso)
+    filename = build_filename(order_number, "LEGO", order_date_iso, shipment_num=shipment_num)
+    return folder_path, filename
+
+
+def _move_drive_file(drive, file_id: str, new_folder_id: str, new_filename: str) -> None:
+    """Moves a Drive file into new_folder_id and renames it to new_filename
+    in one call. Drive v3 has no folder-hierarchy "move" as such -- changing
+    parents + name together is the standard way to relocate a file.
+    Removes every parent the file currently has (a Drive file can
+    technically have more than one; every file Agent 01D has ever copied
+    into _unmatched/ only has one today, but this stays correct even if
+    that ever changes)."""
+    current = drive.files().get(fileId=file_id, fields="parents").execute()
+    old_parents = ",".join(current.get("parents") or [])
+    drive.files().update(
+        fileId=file_id,
+        addParents=new_folder_id,
+        removeParents=old_parents,
+        body={"name": new_filename},
+        fields="id, name, parents",
+    ).execute()
+
+
+def _next_shipment_number(order_id: str, order_number: str, client) -> int:
+    """How many of this order's invoice_files rows have ALREADY been
+    relocated by this agent's own file-relocation logic -- their
+    filed_filename already matches the standard "{order_number}_LEGO_..."
+    convention this agent (and Agent 01B's live Gmail pipeline, which uses
+    the exact same build_filename() convention) writes on a successful
+    filing. Used so relocating a file for an order that already has other
+    filed invoices continues the _ship{N} numbering correctly instead of
+    colliding with an already-filed name. Only matters for the
+    ORDER_EXISTS/CONFIRMED path below -- a brand-new (CLEAN) order has zero
+    linked invoice_files before its own write, so it always starts at 1
+    there without needing this query.
+
+    Deliberately checks invoice_files.filed_filename rather than
+    shipments.invoice_number (an earlier version did, caught wrong in code
+    review, 2026-09-18): that column gets set by write paths unrelated to
+    whether a PDF was actually relocated to Drive (e.g. a shipment created
+    through an interactive capture_queue_promotion.py merge, whose source
+    file this agent never touched) -- and a CONFIRMED match here never
+    creates a new shipments row at all, so counting that field would have
+    let two separate CONFIRMED matches for the same order_number, made in
+    different runs, compute the identical shipment number and silently
+    collide on the exact same destination filename in Drive."""
+    prefix = f"{order_number}_LEGO_"
+    result = (
+        client.table("invoice_files")
+        .select("filed_filename")
+        .eq("user_id", PHASE_1_USER_ID)
+        .eq("order_id", order_id)
+        .execute()
+    )
+    already_filed = sum(
+        1 for r in (result.data or []) if (r.get("filed_filename") or "").startswith(prefix)
+    )
+    return already_filed + 1
+
+
+def _relocate_group_files(drive, client, plan: "InvoiceGroupPlan", starting_shipment_num: int = 1) -> None:
+    """Moves this group's source PDF(s) out of _unmatched/ into their final
+    {Retailer}/{Year}/{Month Year}/ folder and renames them to the standard
+    {order_number}_{RETAILER}_{date}.pdf convention (_ship{N} suffix for
+    N > 1), updating invoice_files.filed_filename to match.
+
+    MUST only be called after the group's DB write (capture_queue/order
+    write, _link_invoice_files) has already fully succeeded -- never
+    before, so a mid-run failure here can never leave a file moved but its
+    ledger row unlinked, or vice versa. By the time this runs, the DB state
+    is already correct and committed; a failure in here just leaves the
+    physical file sitting in _unmatched/ for later manual tidying, which is
+    safe -- the ledger's order_id link (already set) is what actually
+    matters for correctness, not the file's Drive location. Never lets a
+    Drive hiccup on this last step make an otherwise-successful group look
+    like it failed -- caught and logged per file, not raised.
+    """
+    if plan.order_number.startswith("__unresolved__") or not plan.invoices:
+        return
+
+    primary = plan.invoices[0]
+    order_date_iso = _parse_lego_date(primary.order_date) or _parse_lego_date(primary.invoice_date)
+    if not order_date_iso:
+        print(f"    NOTE: {plan.order_number} -- no usable order date, leaving file(s) in _unmatched/.")
+        return
+
+    folder_id = None
+    for offset, (inv, file_row) in enumerate(zip(plan.invoices, plan.file_rows)):
+        shipment_num = starting_shipment_num + offset
+        try:
+            folder_path, new_filename = _relocation_target(plan.order_number, order_date_iso, shipment_num)
+            if folder_id is None:
+                folder_id = resolve_folder_id(drive, folder_path)
+            _move_drive_file(drive, file_row["drive_file_id"], folder_id, new_filename)
+            client.table("invoice_files").update(
+                {"filed_filename": new_filename}
+            ).eq("id", file_row["id"]).execute()
+            print(f"    Filed: {new_filename}")
+        except Exception as e:
+            print(
+                f"    NOTE: could not relocate {file_row.get('filed_filename', file_row['id'])} "
+                f"for {plan.order_number}: {e}"
+            )
+
+
+# --------------------------------------------------------------------------- #
 # Apply: every group always lands in capture_queue in some form
 # --------------------------------------------------------------------------- #
 
-def _apply_order_exists(plan: InvoiceGroupPlan, client) -> tuple[str, str]:
+def _apply_order_exists(plan: InvoiceGroupPlan, client, drive=None) -> tuple[str, str]:
     """The order_number already has a real order. Compare what this run's
     PDF(s) say against what's actually on file, and either confirm (quiet
-    but logged) or flag (never auto-fixed -- see module docstring)."""
+    but logged) or flag (never auto-fixed -- see module docstring).
+
+    `drive` (added 2026-09-19): when given, a confirmed match also
+    relocates its source PDF(s) out of _unmatched/ -- see
+    _relocate_group_files(). Left as None (no relocation attempted) by any
+    caller that doesn't have a Drive connection, e.g. a future test."""
     order_id = plan.existing_order_id
     compare_items = [item for inv in plan.invoices for item in _invoice_to_compare_items(inv)]
 
@@ -636,6 +810,15 @@ def _apply_order_exists(plan: InvoiceGroupPlan, client) -> tuple[str, str]:
         )
         client.table("capture_queue").insert(capture_row).execute()
         _link_invoice_files(plan, order_id, client)
+        if drive is not None:
+            # Only after the DB write above has fully succeeded (see
+            # _relocate_group_files()'s own docstring on why the ordering
+            # matters). Numbering continues from however many shipments
+            # this order already has filed, not always 1 -- this order
+            # existed before this run, so it may already have other real
+            # shipments on file.
+            starting_num = _next_shipment_number(order_id, plan.order_number, client)
+            _relocate_group_files(drive, client, plan, starting_shipment_num=starting_num)
         return "CONFIRMED", f"order_id {order_id}"
 
     # Attributed to the first invoice in this run (best-effort, matching the
@@ -802,11 +985,16 @@ OUTCOME_CATEGORIES = (
 )
 
 
-def apply_plan(plan: InvoiceGroupPlan, client) -> tuple[str, str]:
+def apply_plan(plan: InvoiceGroupPlan, client, drive=None) -> tuple[str, str]:
     """Executes one group's plan. Returns (category, detail) -- category is
-    always one of OUTCOME_CATEGORIES above."""
+    always one of OUTCOME_CATEGORIES above.
+
+    `drive` (added 2026-09-19): when given, a successful CLEAN write or
+    ORDER_EXISTS confirmation also relocates its source PDF(s) out of
+    _unmatched/ into their final folder (see _relocate_group_files()).
+    Left as None (no relocation) by any caller without a Drive connection."""
     if plan.outcome == "ORDER_EXISTS":
-        return _apply_order_exists(plan, client)
+        return _apply_order_exists(plan, client, drive=drive)
 
     if plan.outcome == "MERGE_PENDING":
         return _apply_merge_pending(plan, client)
@@ -843,6 +1031,11 @@ def apply_plan(plan: InvoiceGroupPlan, client) -> tuple[str, str]:
         return "QUEUED", f"auto-promote failed: {result['message']}"
 
     _link_invoice_files(plan, result["order_id"], client)
+    if drive is not None:
+        # Brand-new order -- always starts at shipment 1, no prior filed
+        # shipments to continue numbering from (see _relocate_group_files()'s
+        # docstring for why this must come strictly after the DB write above).
+        _relocate_group_files(drive, client, plan, starting_shipment_num=1)
     return "WRITTEN", f"order_id {result['order_id']}"
 
 
@@ -885,7 +1078,7 @@ def mode_preview(drive_business, client) -> None:
     print("\n  Run Mode 2 (or --run) to execute this plan.")
 
 
-def _execute_plan(plans: list[InvoiceGroupPlan], client) -> dict:
+def _execute_plan(plans: list[InvoiceGroupPlan], client, drive=None) -> dict:
     """Runs apply_plan() for every group and tallies outcomes by category.
     Every category in OUTCOME_CATEGORIES is counted explicitly (2026-09-18
     fix: the previous version matched free-text message prefixes into a
@@ -893,11 +1086,12 @@ def _execute_plan(plans: list[InvoiceGroupPlan], client) -> dict:
     then never printed the OTHER count, so RESURFACED, NOTHING_NEW, and
     FLAGGED_UNPARSEABLE outcomes were silently missing from an unattended
     run's reported totals -- caught in code review before this ever ran
-    against real data)."""
+    against real data). `drive` (added 2026-09-19) is passed straight
+    through to apply_plan() for file relocation."""
     outcomes = {k: 0 for k in OUTCOME_CATEGORIES}
     for i, plan in enumerate(plans, 1):
         try:
-            category, detail = apply_plan(plan, client)
+            category, detail = apply_plan(plan, client, drive=drive)
         except Exception as e:
             print(f"  {i:>4}. ERROR applying {plan.order_number}: {e}")
             outcomes["ERROR"] += 1
@@ -932,7 +1126,7 @@ def mode_run(drive_business, client, *, interactive: bool = True) -> None:
         return
 
     print()
-    outcomes = _execute_plan(plans, client)
+    outcomes = _execute_plan(plans, client, drive=drive_business)
 
     print()
     print("-" * 70)
