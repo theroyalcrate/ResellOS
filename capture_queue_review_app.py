@@ -9,10 +9,31 @@ imports and reuses its private helpers (_build_order, _find_existing_order,
 _write_shipments) directly, plus agent_02_order_entry.write_order() and
 order_validators.run_all_checks(), so this is a new front end on the same
 proven backend contract, not a new data path. capture_queue_promotion.py's
-interactive CLI is untouched -- confirmed permanent scriptable fallback per
-ADR-028's Resolution (e.g. the merge-shipped-capture and duplicate-discard
-flows for messy rows, which this tool deliberately does NOT attempt to
-replicate -- those stay "Needs CLI" here).
+interactive CLI remains a scriptable fallback per ADR-028's Resolution, but
+this app DOES handle the "shipped capture merges into an existing order"
+and "duplicate checkout capture" cases directly (since 2026-08-21/2026-09-14
+-- an earlier version of this docstring said those "stay Needs CLI here,"
+which stopped being true once merge_shipped_row()/the duplicate_checkout
+branch were added; corrected 2026-09-18 after code review caught the stale
+claim). "Needs CLI" is now reserved for whatever `evaluate_row()` doesn't
+have a named case for at all.
+
+**Discrepancy rows, added 2026-09-18 (CONTEXT.md Open Question #22).** An
+unattended writer (agent_1e_pdf_backfill is the first) can flag a
+capture_queue row with `raw_data._discrepancy` when it finds data for an
+order_number that already has a real order, but the new data doesn't match
+what's on file -- per Josh's explicit instruction, that writer never
+applies a fix itself, only flags it. This app recognizes that case
+(`evaluate_row()`'s "discrepancy" kind) and offers the same
+`add_missing_items_to_order()` fix action `capture_queue_promotion.py`'s
+CLI has, so Josh doesn't have to switch tools to handle it. The
+"shipped-stage merge" case (an existing order already created, a later
+capture arrives with tracking/payment info) got the equivalent fix the same
+day: `merge_shipped_row()` can now also add missing items it finds, not
+just merge tracking -- this was the exact bug class (6 real orders missing
+a whole shipment, 2026-09-17) this session exists to close, and this app's
+version of the fix was initially missed when capture_queue_promotion.py's
+CLI got it first.
 
 Run:  streamlit run capture_queue_review_app.py
 """
@@ -23,9 +44,14 @@ import httpx
 import streamlit as st
 
 from db_client import get_client, PHASE_1_USER_ID
-from capture_queue_promotion import _build_order, _find_existing_order, _write_shipments
+from capture_queue_promotion import (
+    _build_order,
+    _find_existing_order,
+    _write_shipments,
+    add_missing_items_to_order,
+)
 from agent_02_order_entry import write_order
-from order_validators import run_all_checks
+from order_validators import run_all_checks, find_missing_line_items, raw_line_items_to_compare_items
 
 
 st.set_page_config(page_title="ResellOS -- Capture Queue Review", layout="wide")
@@ -128,6 +154,31 @@ def evaluate_row(client, row):
     line_items = raw.get("line_items") or []
     order_number = raw.get("order_number") or row.get("order_number")
 
+    # A discrepancy row (added 2026-09-18, CONTEXT.md Open Question #22): an
+    # unattended writer (agent_1e_pdf_backfill is the first) found data for
+    # an order_number that already has a real order, but the new data didn't
+    # match what's on file. Per Josh's explicit instruction, that writer
+    # never applies a fix itself -- it only flags it here, structured enough
+    # to act on directly (missing_items already carries everything
+    # add_missing_items_to_order() needs). Must be checked before the
+    # "already exists" branch below, which would otherwise treat this as an
+    # ordinary shipped-stage merge and miss the structured discrepancy data.
+    discrepancy = raw.get("_discrepancy")
+    if discrepancy:
+        return {
+            "kind": "discrepancy",
+            "reason": (
+                f"Order {order_number} already exists (order_id {discrepancy.get('existing_order_id')}), "
+                f"but new data found item(s) that don't match what's on file."
+            ),
+            "existing_order_id": discrepancy.get("existing_order_id"),
+            "missing_items": discrepancy.get("missing_items") or [],
+            "detected_by": discrepancy.get("detected_by"),
+            "detected_at": discrepancy.get("detected_at"),
+            "note": discrepancy.get("note"),
+            "shipment_meta": discrepancy.get("shipment_meta"),
+        }
+
     # Some agent_1d/1e PDF-backfill rows come from a PDF that failed to parse
     # entirely -- no order_number, no line items, no total, nothing to build
     # an order from. Distinct from "needs_cli" (a real duplicate) and from
@@ -158,28 +209,30 @@ def evaluate_row(client, row):
         # real cases behind that label are now handled directly here.
         capture_stage = raw.get("capture_stage") or "shipped"
         if capture_stage == "shipped":
-            incoming_items = raw.get("line_items") or []
-            existing_items = (
-                client.table("line_items")
-                .select("line_item_id")
-                .eq("order_id", existing["order_id"])
-                .execute()
-            ).data or []
+            # Real missing-item reconciliation (2026-09-18, CONTEXT.md Open
+            # Question #22), replacing a crude "do the counts match" check
+            # that never actually looked at WHAT was different and never let
+            # this app do anything about it -- the exact gap that let
+            # agent_1e_pdf_backfill silently drop a whole shipment on 6 real
+            # orders. capture_queue_promotion.py's CLI got this fix first;
+            # this app was found (in code review) to have been missed.
+            compare_items = raw_line_items_to_compare_items(raw.get("line_items") or [])
+            missing_items = (
+                find_missing_line_items(existing["order_id"], compare_items, client=client)
+                if compare_items else []
+            )
             return {
                 "kind": "shipped_merge",
                 "reason": (
                     f"This is the 'shipped' (order-details) capture for order {order_number} -- "
                     f"the 'checkout' capture for the same order was already promoted to order_id "
-                    f"{existing['order_id']}. Merging just adds tracking numbers and payment-card "
-                    f"identities onto that existing order; it never touches its line items or totals."
+                    f"{existing['order_id']}. Merging adds tracking numbers and payment-card "
+                    f"identities onto that existing order; it can also add any missing item(s) "
+                    f"found below if you choose to."
                 ),
                 "existing_order_id": existing["order_id"],
                 "existing_order_status": existing.get("order_status"),
-                "item_count_mismatch": (
-                    len(incoming_items) != len(existing_items) if incoming_items and existing_items else False
-                ),
-                "existing_item_count": len(existing_items),
-                "incoming_item_count": len(incoming_items),
+                "missing_items": missing_items,
                 "raw": raw,
             }
         return {
@@ -269,7 +322,10 @@ def promote_row(client, row, order, items, buy_reason=None, purchase_trigger=Non
     ).eq("capture_id", row["capture_id"]).execute()
 
     raw = row.get("raw_data") or {}
-    _write_shipments(client, new_order_id, raw.get("shipments") or [])
+    _write_shipments(
+        client, new_order_id, raw.get("shipments") or [],
+        entry_method=raw.get("source") or "capture_queue_promotion",
+    )
 
     return {"ok": True, "order_id": new_order_id}
 
@@ -280,15 +336,37 @@ def discard_row(client, row, reason):
     ).eq("capture_id", row["capture_id"]).execute()
 
 
-def merge_shipped_row(client, row, raw, existing_order_id):
+def merge_shipped_row(client, row, raw, existing_order_id, missing_items=None, add_missing=False):
     """Non-interactive counterpart to capture_queue_promotion.py's
     _merge_shipped_capture (added 2026-09-14, closing the 'Needs CLI'
     dead-end for this case). Adds tracking numbers (via _write_shipments)
     and payment-card identities from a 'shipped'-stage capture onto an
-    order a 'checkout'-stage capture already created. Purely additive and
-    safe -- never touches the existing order's line_items, totals, or any
-    other field besides appending to notes -- so unlike promote/discard
-    this doesn't need a confirmation step of its own."""
+    order a 'checkout'-stage capture already created.
+
+    `missing_items`/`add_missing` (added 2026-09-18, CONTEXT.md Open
+    Question #22): this function used to only merge tracking/payment info
+    and never checked whether the capture's line items actually matched
+    what's on file for the order -- the exact same gap that let
+    agent_1e_pdf_backfill silently drop a whole shipment on 6 real orders,
+    still reachable through this app specifically because
+    capture_queue_promotion.py's CLI got this fix first and this app didn't
+    (caught in code review). When `add_missing` is true, the caller has
+    already confirmed (via the checkbox in the UI) that `missing_items`
+    (from order_validators.find_missing_line_items(), computed in
+    evaluate_row()) should be added -- mirrors _merge_shipped_capture()'s
+    own logic exactly, including restricting the _write_shipments() call to
+    just the newly-added items so it can never reassign an item that's
+    already correctly attached to a different, real shipment elsewhere on
+    the order (see that function's docstring for the corruption this
+    prevents).
+    """
+    newly_added_line_item_ids = None
+    add_result = None
+    if add_missing and missing_items:
+        add_result = add_missing_items_to_order(client, existing_order_id, missing_items)
+        if add_result["ok"]:
+            newly_added_line_item_ids = set(add_result["added_line_item_ids"])
+
     payment_methods = raw.get("payment_methods") or []
     card_lines = [
         f"{pm.get('brand') or 'Gift card'} ...{pm.get('last4')}"
@@ -296,7 +374,11 @@ def merge_shipped_row(client, row, raw, existing_order_id):
         if pm.get("last4")
     ]
 
-    _write_shipments(client, existing_order_id, raw.get("shipments") or [])
+    _write_shipments(
+        client, existing_order_id, raw.get("shipments") or [],
+        only_line_item_ids=newly_added_line_item_ids,
+        entry_method=raw.get("source") or "capture_queue_promotion",
+    )
 
     if card_lines:
         current = (
@@ -314,7 +396,7 @@ def merge_shipped_row(client, row, raw, existing_order_id):
         "reviewed_at": _now_iso(),
     }).eq("capture_id", row["capture_id"]).execute()
 
-    return {"ok": True, "order_id": existing_order_id, "card_lines": card_lines}
+    return {"ok": True, "order_id": existing_order_id, "card_lines": card_lines, "add_result": add_result}
 
 
 # --------------------------------------------------------------------------- #
@@ -461,6 +543,7 @@ def render_review_queue(client):
         "empty": "⚪ Empty",
         "shipped_merge": "\U0001F535 Ready to merge",
         "duplicate_checkout": "\U0001F7E0 Likely duplicate",
+        "discrepancy": "⚠️ Discrepancy vs. existing order",
     }
 
     for row in rows:
@@ -484,22 +567,106 @@ def render_review_queue(client):
                 st.caption(f"Run `python capture_queue_promotion.py` for this one -- capture_id: {capture_id}")
                 continue
 
+            if ev["kind"] == "discrepancy":
+                st.warning(ev["reason"])
+                for m in ev["missing_items"]:
+                    name = m.get("set_name") or m.get("set_number") or "item"
+                    st.write(
+                        f"- {name}: **{m.get('quantity_missing')}** unit(s) possibly missing "
+                        f"(currently on file: {m.get('quantity_on_file')})"
+                    )
+                if ev.get("note"):
+                    st.caption(ev["note"])
+                st.caption(
+                    f"Detected by {ev.get('detected_by') or 'unknown'} at "
+                    f"{ev.get('detected_at') or 'an unknown time'}. See CONTEXT.md Open Question #22."
+                )
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    add_disabled = not ev["missing_items"]
+                    if st.button("Add missing item(s) to this order", key=f"addmissing_{capture_id}", disabled=add_disabled):
+                        shipment_meta = ev.get("shipment_meta") or {}
+                        # additional_tax (2026-09-18, caught in code review,
+                        # same fix as capture_queue_promotion.py's CLI path):
+                        # shipment_meta's tax_amount is a real, parsed figure
+                        # from the invoice that revealed this discrepancy --
+                        # without passing it through, the order's tax_paid
+                        # silently stays stale.
+                        result = add_missing_items_to_order(
+                            client, ev["existing_order_id"], ev["missing_items"],
+                            shipment_meta=shipment_meta or None,
+                            additional_tax=shipment_meta.get("tax_amount"),
+                        )
+                        if result["ok"]:
+                            st.success(
+                                f"Added {result['added_item_count']} item(s), "
+                                f"${result['added_subtotal']:.2f} to order_id {ev['existing_order_id']}."
+                            )
+                            client.table("capture_queue").update({
+                                "status": "promoted",
+                                "promoted_order_id": ev["existing_order_id"],
+                                "reviewed_at": _now_iso(),
+                                "review_note": (
+                                    f"Missing items added to existing order_id "
+                                    f"{ev['existing_order_id']} via the review app."
+                                ),
+                            }).eq("capture_id", capture_id).execute()
+                            del st.session_state.evaluations[capture_id]
+                            st.rerun()
+                        else:
+                            st.error(result["message"])
+                with col_b:
+                    skip_reason = st.text_input(
+                        "Reason for not adding (optional)", key=f"discrepreason_{capture_id}"
+                    )
+                    if st.button("Mark reviewed, don't add", key=f"skipdiscrep_{capture_id}"):
+                        client.table("capture_queue").update({
+                            "status": "discarded",
+                            "promoted_order_id": ev["existing_order_id"],
+                            "review_note": skip_reason or "Reviewed via app, no action taken.",
+                            "reviewed_at": _now_iso(),
+                        }).eq("capture_id", capture_id).execute()
+                        del st.session_state.evaluations[capture_id]
+                        st.rerun()
+                continue
+
             if ev["kind"] == "shipped_merge":
                 st.info(
                     "This isn't a new order -- it's the follow-up 'shipped' capture for an order "
-                    "already created from an earlier 'checkout' capture. Merging just adds tracking "
+                    "already created from an earlier 'checkout' capture. Merging adds tracking "
                     "numbers and payment-card identities to that existing order."
                 )
                 st.caption(ev["reason"])
-                if ev["item_count_mismatch"]:
+                add_missing = False
+                if ev["missing_items"]:
                     st.warning(
-                        f"This capture lists {ev['incoming_item_count']} item(s) but the existing "
-                        f"order has {ev['existing_item_count']} -- worth a manual look, but merging "
-                        f"tracking/payment info is still safe either way (line items are never touched)."
+                        "This capture indicates item(s) not currently on file for this order "
+                        "(see CONTEXT.md Open Question #22):"
+                    )
+                    for m in ev["missing_items"]:
+                        name = m.get("set_name") or m.get("set_number") or "item"
+                        st.write(
+                            f"- {name}: **{m.get('quantity_missing')}** unit(s) possibly missing "
+                            f"(currently on file: {m.get('quantity_on_file')})"
+                        )
+                    add_missing = st.checkbox(
+                        "Also add the missing item(s) above to this order",
+                        key=f"addmissing_shipped_{capture_id}",
                     )
                 if st.button("Merge into existing order", key=f"merge_{capture_id}"):
-                    result = merge_shipped_row(client, row, ev["raw"], ev["existing_order_id"])
-                    st.success(f"Merged -> order_id {result['order_id']}")
+                    result = merge_shipped_row(
+                        client, row, ev["raw"], ev["existing_order_id"],
+                        missing_items=ev["missing_items"], add_missing=add_missing,
+                    )
+                    if result.get("add_result") and not result["add_result"]["ok"]:
+                        st.warning(f"Merged, but adding missing items failed: {result['add_result']['message']}")
+                    elif result.get("add_result"):
+                        st.success(
+                            f"Merged -> order_id {result['order_id']} -- also added "
+                            f"{result['add_result']['added_item_count']} missing item(s)."
+                        )
+                    else:
+                        st.success(f"Merged -> order_id {result['order_id']}")
                     del st.session_state.evaluations[capture_id]
                     st.rerun()
                 continue

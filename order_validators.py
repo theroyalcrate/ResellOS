@@ -272,6 +272,205 @@ def check_line_items_reconcile(items: list[dict], expected_subtotal: Optional[fl
 
 
 # --------------------------------------------------------------------------- #
+# 5. Missing line items on an order that already exists (found 2026-09-17 --
+#    see CONTEXT.md Open Question #22 and the 2026-09-17 Session History
+#    entry for the bug this closes: agent_1e_pdf_backfill silently dropped
+#    an entire shipment's line items on 6 real orders, undetected, because
+#    nothing ever compared newly-parsed data against what was already on
+#    file for an order_number that already existed.)
+# --------------------------------------------------------------------------- #
+
+def raw_line_items_to_compare_items(raw_line_items: list[dict]) -> list[dict]:
+    """Shapes a capture_queue raw_data['line_items'] list (ADR-023 shape --
+    each item has both 'unit_price' [pre-discount] and 'net_price' [what was
+    actually paid]) into what find_missing_line_items()/_compute_missing_items()
+    expect: a plain 'unit_price' key that means the actual per-unit amount
+    paid, since that's what add_missing_items_to_order() prices a missing
+    item at.
+
+    The single source of truth for this shaping (2026-09-18, added after
+    code review caught capture_queue_promotion.py's _merge_shipped_capture()
+    feeding _map_line_items()'s output straight into find_missing_line_items()
+    instead -- that function's 'unit_price' means the pre-discount MSRP, not
+    what was paid, which would have silently overstated cost basis for any
+    missing item that had a discount. agent_01e_pdf_backfill.py's
+    _invoice_to_compare_items() calls this too (after first converting its
+    LegoInvoice line items to this same raw dict shape) so there is exactly
+    one place that decides what 'unit_price' means for this comparison.
+    """
+    items = []
+    for it in raw_line_items:
+        net_price = it.get("net_price")
+        unit_price = it.get("unit_price")
+        items.append({
+            "set_name": it.get("description"),
+            "set_number": it.get("set_number"),
+            "is_gwp": bool(it.get("is_gwp")),
+            "unit_price": float(net_price if net_price is not None else (unit_price or 0)),
+            # msrp (2026-09-18, code review): the pre-discount price,
+            # carried through separately so add_missing_items_to_order()
+            # can record a real discount on a reconstructed missing item
+            # instead of losing it (msrp == unit_price, line_discount == 0)
+            # the moment an item is rebuilt through this comparison path.
+            "msrp": float(unit_price) if unit_price is not None else None,
+            "quantity": it.get("quantity") or 1,
+        })
+    return items
+
+
+def _item_match_key(it: dict) -> tuple:
+    """Match key for comparing an item against what's already on an order.
+    Prefer set_number (normalized) when present -- it's the more reliable
+    identity. Fall back to (normalized set_name, is_gwp) for items with no
+    set_number at all (common on GWPs), so they can still be matched
+    instead of always looking "missing".
+
+    is_gwp is always part of the key (2026-09-18 fix, caught in code
+    review) -- a set can legitimately ship as both a paid item and a same-
+    numbered promotional GWP on one order. Without is_gwp in the
+    set_number key, a paid unit and a GWP unit of the same set could
+    silently cross-match: an existing GWP "covering" an incoming paid
+    unit's quantity would let a real missing paid item pass the check
+    undetected -- exactly backwards from what this check exists for."""
+    set_number = (it.get("set_number") or "").strip().lower()
+    is_gwp = bool(it.get("is_gwp"))
+    if set_number:
+        return ("set_number", set_number, is_gwp)
+    set_name = (it.get("set_name") or it.get("description") or "").strip().lower()
+    return ("set_name", set_name, is_gwp)
+
+
+def _safe_int(value) -> int:
+    """Never raises -- a malformed quantity (e.g. a non-numeric string from
+    a source _compute_missing_items() wasn't originally written for) is
+    treated as 0 rather than crashing the whole comparison. Added
+    2026-09-18 after code review found a bare int() call here contradicted
+    find_missing_line_items()'s own "never raises" docstring promise --
+    capture_queue_review_app.py's evaluate_row() has no exception handling
+    around this call, so an uncaught ValueError here would have crashed the
+    whole review-queue page over one bad item."""
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _compute_missing_items(incoming_items: list[dict], existing_items: list[dict]) -> list[dict]:
+    """
+    Pure comparison logic behind find_missing_line_items() below -- no
+    client, no network, just two plain item lists in and a list of warning
+    dicts out. Split out on its own (2026-09-18) so it can be unit-tested
+    directly, matching this codebase's existing convention of only unit-
+    testing pure logic (see tests/test_order_confirm_review_app.py).
+
+    This is a presence/quantity check only -- it does not compare dollar
+    totals. That's deliberate: the caller may only have parsed ONE of
+    several shipments for this order this run (e.g. agent_1e_pdf_backfill
+    grouping whatever invoices it found today, when the order may have other
+    shipments it never saw a PDF for), so a partial view's subtotal will
+    legitimately be less than the order's real total. Comparing item
+    presence/quantity instead avoids false positives from that, while still
+    catching the actual failure mode this exists for: a shipment's worth of
+    items that were never written to `line_items` at all.
+
+    Matching is by set_number when available, falling back to (set_name,
+    is_gwp) for items with no set_number (common on GWPs). Quantity is
+    tracked as a pool per match key -- if the existing order has 2 of a set
+    and incoming says 3, that's a shortfall of 1 (a real partial gap, e.g.
+    the T508221251 case from 2026-09-17: 2 on file, 3 actually received).
+
+    Cancelled items are excluded from both sides (ADR-029) -- a cancelled
+    item is expected to differ, not a data gap.
+
+    Returns one warning dict per item with a real shortfall, each carrying
+    enough detail (set_number, set_name, is_gwp, unit_price,
+    quantity_missing, quantity_on_file) for a caller to actually build the
+    missing line_item row(s) -- not just a printed message.
+    """
+    incoming = _received_only(incoming_items)
+    if not incoming:
+        return []
+
+    existing_rows = [r for r in existing_items if r.get("item_status") != "cancelled"]
+
+    # Pool of remaining existing quantity per match key -- decremented as
+    # incoming items claim coverage, so a later incoming item can't double-
+    # count the same existing units.
+    pool: dict[tuple, int] = {}
+    for row in existing_rows:
+        key = _item_match_key(row)
+        pool[key] = pool.get(key, 0) + _safe_int(row.get("quantity"))
+
+    warnings = []
+    for it in incoming:
+        key = _item_match_key(it)
+        quantity_expected = _safe_int(it.get("quantity"))
+        if quantity_expected <= 0:
+            continue
+        available = pool.get(key, 0)
+        if available >= quantity_expected:
+            pool[key] = available - quantity_expected
+            continue
+        quantity_missing = quantity_expected - max(available, 0)
+        pool[key] = 0
+        name = it.get("set_name") or it.get("description") or it.get("set_number") or "item"
+        warnings.append({
+            "check": "missing_line_item",
+            "message": (
+                f"{name} -- this order's records show {max(available, 0)} on file, but the new "
+                f"data indicates {quantity_expected} -- {quantity_missing} unit(s) may be missing "
+                f"from this order's line items."
+            ),
+            "blocking": False,
+            "set_number": it.get("set_number"),
+            "set_name": it.get("set_name") or it.get("description"),
+            "is_gwp": bool(it.get("is_gwp")),
+            "unit_price": it.get("unit_price"),
+            # msrp (2026-09-18): pre-discount price, when the caller
+            # supplied one (raw_line_items_to_compare_items() does; a
+            # caller building compare_items by hand may not) -- lets
+            # add_missing_items_to_order() record a real discount instead
+            # of always writing line_discount=0 for a reconstructed item.
+            "msrp": it.get("msrp"),
+            "quantity_missing": quantity_missing,
+            "quantity_on_file": max(available, 0),
+        })
+    return warnings
+
+
+def find_missing_line_items(order_id: str, incoming_items: list[dict], client=None) -> list[dict]:
+    """
+    Compares `incoming_items` (newly parsed/captured data for an order_number
+    that ALREADY has a real order) against the line items actually on file
+    for `order_id`, and flags anything incoming that isn't already covered.
+    See _compute_missing_items() above for the actual comparison rules --
+    this is just the DB-fetching wrapper around it. Never raises; a failed
+    lookup returns a single soft warning instead of blocking whatever write
+    path is protecting.
+    """
+    client = client if client is not None else get_client()
+    if not _received_only(incoming_items):
+        return []
+
+    try:
+        existing = (
+            client.table("line_items")
+            .select("set_number, set_name, quantity, unit_price, is_gwp, item_status")
+            .eq("order_id", order_id)
+            .execute()
+        )
+        existing_rows = existing.data or []
+    except Exception as e:
+        return [{
+            "check": "missing_line_items_check_error",
+            "message": f"NOTE: missing-items check could not run ({e}); proceeding without it.",
+            "blocking": False,
+        }]
+
+    return _compute_missing_items(incoming_items, existing_rows)
+
+
+# --------------------------------------------------------------------------- #
 # Convenience: run everything that applies and print a plain summary
 # --------------------------------------------------------------------------- #
 

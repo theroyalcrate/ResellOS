@@ -611,7 +611,16 @@ def print_summary(order, line_items, rewards_summary):
 # Database write
 # --------------------------------------------------------------------------- #
 
-def write_order(order, line_items, client):
+def write_order(order, line_items, client, interactive=True):
+    """`interactive=False` is for unattended callers (agent_1e's scheduled
+    run) -- it must never call get_input()/get_yes_no(), since there's no
+    human there to answer and the process would otherwise hang forever on
+    stdin. The only prompt this function has is the "order already exists"
+    check right below; in non-interactive mode that just refuses and returns
+    False instead of asking. Every other caller (agent_02's manual flow,
+    capture_queue_promotion.py's interactive promote()) is unaffected --
+    `interactive` defaults to True, same behavior as before this parameter
+    existed."""
     existing = (
         client.table("orders")
         .select("order_id")
@@ -620,6 +629,12 @@ def write_order(order, line_items, client):
         .execute()
     )
     if existing.data:
+        if not interactive:
+            print(
+                f"\nREFUSED (non-interactive): order {order['order_number']} already exists "
+                f"(order_id {existing.data[0]['order_id']}) -- not writing a duplicate."
+            )
+            return False
         print(f"\nWARNING: Order {order['order_number']} already exists.")
         if not get_yes_no("Write anyway?", default="n"):
             print("Cancelled.")
