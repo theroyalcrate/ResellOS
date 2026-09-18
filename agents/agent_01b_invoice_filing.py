@@ -30,6 +30,28 @@ Modes:
   4 — Personal backfill : copy unprocessed personal LEGO emails to business Gmail
   5 — Safety filter : create personal Gmail filter for e.lego.com emails
 
+NON-INTERACTIVE MODE (added 2026-09-19, mirroring agents/agent_01e_pdf_order_backfill.py's
+--run/--preview/--report pattern -- see that file for the sibling half of
+this session's work). Run with `--run`, `--preview`, or `--report` to skip
+the numbered menu above entirely, safe for Windows Task Scheduler:
+  --preview : same as Mode 1 -- scan, show the plan, no writes, exit.
+  --report  : same as Mode 3 -- print the invoice_files ledger, exit.
+  --run     : scan (Mode 1's logic), then file EVERY pending invoice
+              directly via mode_run_batch() -- no get_input()/get_yes_no()
+              prompts anywhere in that path. An exception filing one
+              invoice is caught and logged, never aborts the rest of the
+              batch (with ~1,169 messages sitting in ResellOS-Invoices as
+              of 2026-09-19 and no automated filing ever run against most
+              of them, one bad PDF stopping an entire overnight run would
+              be a real problem). Prints a summary at the end: total
+              processed, filed-and-matched count, filed-unmatched count,
+              error count.
+With no flags, the original interactive menu below runs unchanged -- same
+convention as agent_01e, nothing breaks for a manual session at a terminal.
+Only Modes 1-3 (business Gmail filing) got this treatment -- Modes 4/5
+(personal Gmail one-time setup) are inherently one-off/manual and were not
+in scope.
+
 Authentication:
   credentials/token_business.json   gmail.modify + drive (business account)
   credentials/token_personal.json   gmail.modify + gmail.settings.basic (personal)
@@ -53,6 +75,7 @@ Idempotency (§5):
           failed on a prior run.
 """
 
+import argparse
 import base64
 import io
 import re
@@ -708,7 +731,24 @@ def match_order(order_number: str, client) -> Optional[dict]:
 
 
 def count_shipments(order_id: str, client) -> int:
-    """Return the number of shipment rows for an order (split-shipment detection)."""
+    """Return the number of shipment rows for an order (split-shipment detection).
+
+    NOTE: not used by build_filing_plan()'s own shipment-numbering as of
+    2026-09-19 -- see _next_shipment_number() below for why. Kept as-is
+    for agent_01d_drive_historical_backfill.py, which still imports and
+    calls this directly; changing its behavior here is out of scope for
+    this session's work on Agent 01B's --run mode.
+
+    IMPORTANT: agent_01d_drive_historical_backfill.py's own call site
+    (line ~325, `count_shipments(order["order_id"], client) + 1`) still
+    has the EXACT same cross-run staleness bug _next_shipment_number()
+    was written to fix here -- filing never inserts a shipments row, so a
+    split-shipment order backfilled across two separate agent_01d runs
+    can still get the same shipment number twice. Fixing Agent 01B and
+    Agent 01E does NOT mean this bug class is resolved codebase-wide;
+    agent_01d needs its own equivalent fix, not yet done (flagged in code
+    review 2026-09-19, deferred as out of scope for this session).
+    """
     result = (
         client.table("shipments")
         .select("shipment_id")
@@ -717,6 +757,44 @@ def count_shipments(order_id: str, client) -> int:
         .execute()
     )
     return len(result.data or [])
+
+
+def _next_shipment_number(order_id: str, order_number: str, retailer_key: str, client) -> int:
+    """How many invoices are already filed for this order (via this agent's
+    own record_filing(), matching the standard build_filename() naming
+    convention) -- used so a second or later invoice for the same order,
+    filed in a LATER --run, continues the _ship{N} numbering instead of
+    colliding with a filename already on record in Drive.
+
+    Deliberately checks invoice_files.filed_filename rather than
+    count_shipments()/the shipments table -- the same bug class already
+    found and fixed in agent_01e_pdf_order_backfill.py's own
+    _next_shipment_number() (2026-09-17, CONTEXT.md Open Question #22),
+    caught here in code review 2026-09-19: filing an invoice via this
+    agent's record_filing() never inserts a shipments row, so
+    count_shipments() would stay frozen at its original value across every
+    future run and hand the SAME shipment number to every later invoice
+    for that order -- a cross-run version of the exact collision
+    mode_run_batch()'s own in-batch tracking (above) already guards
+    against within a single run. This matters specifically because --run
+    is meant to be a RECURRING weekly job (see SESSION_LOG.md/CONTEXT.md),
+    so "a later invoice for an order already filed in a previous week's
+    run" isn't a hypothetical -- it's the normal case for any split
+    shipment that ships across more than one week.
+    """
+    tag = retailer_key.upper().replace(" ", "_")
+    prefix = f"{order_number}_{tag}_"
+    result = (
+        client.table("invoice_files")
+        .select("filed_filename")
+        .eq("user_id", PHASE_1_USER_ID)
+        .eq("order_id", order_id)
+        .execute()
+    )
+    already_filed = sum(
+        1 for r in (result.data or []) if (r.get("filed_filename") or "").startswith(prefix)
+    )
+    return already_filed + 1
 
 
 # --------------------------------------------------------------------------- #
@@ -785,8 +863,9 @@ def build_filing_plan(meta: dict, client, gmail) -> dict:
         retailer_key    = order["retailer"].upper().strip()
         retailer_folder = resolve_retailer_folder(order["retailer"], sender_email)
         order_date_str  = order["order_date"]
-        shipment_count  = count_shipments(order["order_id"], client)
-        next_shipment   = shipment_count + 1
+        next_shipment   = _next_shipment_number(
+            order["order_id"], order_number, retailer_key, client
+        )
         filename        = build_filename(
             order_number, retailer_key, order_date_str, shipment_num=next_shipment
         )
@@ -816,6 +895,14 @@ def build_filing_plan(meta: dict, client, gmail) -> dict:
         "matched":         matched,
         "match_tier":      match_tier,
         "next_shipment":   next_shipment,
+        # order_date_str (added 2026-09-19): the date `filename` was actually
+        # built from for a matched plan -- the ORDER's own order_date, not
+        # `date_str` above (the email's date, a different value). Needed by
+        # mode_run_batch() to correctly rebuild `filename` if it has to bump
+        # next_shipment for an in-batch collision (see that function's
+        # docstring) without silently switching to the wrong date basis.
+        # None for an unmatched plan, which doesn't use order_date_str at all.
+        "order_date_str":  order["order_date"] if order else None,
     }
 
 
@@ -891,16 +978,33 @@ def mode_preview(gmail, client) -> list[dict]:
 # Mode 2 — File one invoice (Part 1)
 # --------------------------------------------------------------------------- #
 
-def _execute_filing(plan: dict, gmail, drive, client) -> bool:
+def _execute_filing(plan: dict, gmail, drive, client) -> tuple[bool, int]:
     """
     Execute the filing plan for one message: download → upload → ledger → relabel.
-    Returns True on full success.
+    Returns (success, pdf_count) -- pdf_count is how many PDF attachments were
+    actually uploaded to Drive before this call returned (each consumes its
+    own shipment-number slot, see build_filename's shipment_num), REGARDLESS
+    of whether the overall call succeeded. Callers that only care about
+    success can ignore pdf_count; mode_run_batch() needs the real count to
+    keep its in-batch collision tracking accurate.
+
+    Caught in code review, 2026-09-19 (two rounds): (1) a message with
+    multiple PDF attachments consumes more than one shipment-number slot,
+    and (2) a PARTIAL failure -- every PDF uploads to Drive successfully but
+    the ledger write then fails -- still leaves real files sitting in Drive
+    occupying those slots, even though the call as a whole returns
+    success=False. Reporting pdf_count=0 for that case (as an earlier
+    version of this function did) would let mode_run_batch() hand out an
+    already-consumed shipment number to the next plan for the same order in
+    the same batch -- the exact collision this whole return-tuple exists to
+    prevent, reopened via the one failure path most likely to strand a real
+    file: Drive succeeds, then Supabase hiccups on the ledger insert.
     """
     msg_id = plan["msg_id"]
 
     if already_filed(msg_id, client):
         print("  Already in ledger — nothing to do.")
-        return False
+        return False, 0
 
     print("  Fetching PDF attachment(s)...")
     try:
@@ -909,11 +1013,11 @@ def _execute_filing(plan: dict, gmail, drive, client) -> bool:
         pdfs    = extract_pdf_attachments(gmail, msg_id, meta["payload"])
     except Exception as e:
         print(f"  ERROR fetching message: {e}")
-        return False
+        return False, 0
 
     if not pdfs:
         print("  No PDF attachment found in this message.")
-        return False
+        return False, 0
 
     if len(pdfs) > 1:
         print(f"  {len(pdfs)} PDF attachments — each will get a _ship{{N}} suffix.")
@@ -923,9 +1027,10 @@ def _execute_filing(plan: dict, gmail, drive, client) -> bool:
         folder_id = resolve_folder_id(drive, plan["folder_path"])
     except Exception as e:
         print(f"  ERROR: Drive folder resolution failed: {e}")
-        return False
+        return False, 0
 
     first_drive_id = None
+    uploaded_count = 0  # real Drive files created so far -- reported even on a later failure
     for idx, pdf in enumerate(pdfs, 1):
         if len(pdfs) > 1:
             if plan["matched"]:
@@ -933,7 +1038,19 @@ def _execute_filing(plan: dict, gmail, drive, client) -> bool:
                 filename = build_filename(
                     plan["order_number"],
                     plan["retailer_key"],
-                    plan["date_str"],
+                    # order_date_str (the order's own date), NOT date_str
+                    # (the email's date) -- a real, pre-existing bug caught
+                    # in code review 2026-09-19 alongside the related fix
+                    # in mode_run_batch() below: a matched order's ship1
+                    # filename (plan["filename"], used for the single-PDF
+                    # case just below) was always built from order_date_str,
+                    # so a multi-PDF-attachment message using date_str here
+                    # instead produced ship2+ filenames silently
+                    # inconsistent with ship1's -- e.g. an order placed in
+                    # June but confirmed by an email that arrived in
+                    # September would file ship1 under the June folder/date
+                    # and ship2 under September.
+                    plan.get("order_date_str") or plan["date_str"],
                     shipment_num=ship_num,
                 )
             else:
@@ -949,19 +1066,33 @@ def _execute_filing(plan: dict, gmail, drive, client) -> bool:
             drive_file_id = upload_pdf(drive, pdf["data"], filename, folder_id)
         except Exception as e:
             print(f"  ERROR: Drive upload failed: {e}")
-            return False
+            return False, uploaded_count
         print(f"  OK: Drive file {drive_file_id}")
+        uploaded_count += 1
 
         if idx == 1:
             first_drive_id = drive_file_id
 
-    ok = record_filing(
-        msg_id, first_drive_id, plan["order_id"],
-        plan["retailer_key"], plan["filename"], client,
-    )
+    try:
+        ok = record_filing(
+            msg_id, first_drive_id, plan["order_id"],
+            plan["retailer_key"], plan["filename"], client,
+        )
+    except Exception as e:
+        # Caught here (not left to propagate), unlike an earlier version of
+        # this function -- caught in code review, 2026-09-19: every OTHER
+        # I/O step above is wrapped this way, but this one wasn't, so a
+        # raised exception (e.g. supabase-py/postgrest raising APIError or
+        # an httpx error, rather than record_filing() returning a plain
+        # False) would propagate straight out of _execute_filing() and be
+        # caught instead by mode_run_batch()'s OUTER try/except -- which
+        # never sees pdf_count, so the in-batch collision tracker never
+        # gets bumped for the real Drive files this call already uploaded.
+        print(f"  ERROR: Ledger write failed ({e}). File is in Drive — record manually.")
+        return False, uploaded_count
     if not ok:
         print("  ERROR: Ledger write failed. File is in Drive — record manually.")
-        return False
+        return False, uploaded_count
     print("  OK: Ledger row written")
 
     try:
@@ -970,7 +1101,7 @@ def _execute_filing(plan: dict, gmail, drive, client) -> bool:
     except Exception as e:
         print(f"  WARNING: Label transition failed ({e}). Update label manually.")
 
-    return True
+    return True, len(pdfs)
 
 
 def mode_file(plans: list[dict], gmail, drive, client) -> None:
@@ -1009,11 +1140,129 @@ def mode_file(plans: list[dict], gmail, drive, client) -> None:
         print("  Cancelled.")
         return
 
-    success = _execute_filing(plan, gmail, drive, client)
+    success, _pdf_count = _execute_filing(plan, gmail, drive, client)
     if success:
         print("\n  Invoice filed successfully.")
     else:
         print("\n  Filing did not complete — see errors above.")
+
+
+def mode_run_batch(plans: list[dict], gmail, drive, client) -> dict:
+    """Non-interactive counterpart to mode_file() -- files EVERY plan from
+    mode_preview() directly via _execute_filing(), added 2026-09-19 for
+    --run (mirroring agents/agent_01e_pdf_order_backfill.py's own
+    --run mode). _execute_filing() itself already has no
+    get_input()/get_yes_no() calls anywhere in it (only mode_file(), the
+    interactive wrapper around it, does) -- this function is what removes
+    that wrapper's own "which one?"/"proceed?" prompts, not a rewrite of
+    the filing logic itself.
+
+    Catches an exception per plan so one bad invoice can never abort the
+    rest of the batch -- with ~1,169 messages sitting in ResellOS-Invoices
+    as of 2026-09-19 and no automated filing ever run against most of
+    them, a single unhandled error midway through an unattended overnight
+    run would otherwise waste the whole thing. Returns a tally dict:
+    {"total", "filed_matched", "filed_unmatched", "error"}.
+
+    In-batch split-shipment collision fix (caught in code review,
+    2026-09-19, before this ever ran live): build_filing_plan() computes
+    each plan's shipment number once, all up front, during mode_preview()'s
+    single scan -- but filing an invoice via this agent never inserts a
+    shipments row (that's a different write path entirely), so two
+    separate messages matched to the SAME order within
+    one batch (a real, explicitly-documented shape -- split shipments) get
+    IDENTICAL precomputed shipment numbers and would silently collide on
+    the exact same destination filename with zero review to catch it. The
+    interactive flow never hit this in practice (Josh files one invoice
+    per script run), but a --run batch processing hundreds of messages in
+    one pass makes it a near-certainty for any real split-shipment order
+    still in the backlog. Fixed here, not in build_filing_plan() itself,
+    by tracking how many matched invoices this run has already filed per
+    order_id and bumping the shipment number (and rebuilding `filename`
+    from the SAME order_date_str the original used -- not `date_str`,
+    which is the email's date, a different value) before filing anything
+    beyond the first for a given order in this batch.
+
+    The per-order tally is counted in shipment-number SLOTS consumed, not
+    plans filed -- caught in a follow-up code review round, 2026-09-19: a
+    single plan can itself consume more than one slot, since a message
+    with multiple PDF attachments gets each attachment its own
+    ship{N} suffix inside _execute_filing() (ship_num = next_shipment +
+    (idx - 1)). If this tracker incremented by 1 per plan instead, a
+    2-attachment plan A (consuming ship1+ship2) followed by a 1-attachment
+    plan B for the same order would only bump B to ship2 -- colliding with
+    the ship2 file A already uploaded. _execute_filing() now returns
+    (success, pdf_count) precisely so this loop can bump by the real
+    number of slots consumed instead of assuming 1.
+
+    The tally bump below is NOT gated on `success` -- a second follow-up
+    review round, 2026-09-19: _execute_filing() can upload every PDF to
+    Drive successfully and then fail at the ledger-write step (Supabase
+    hiccup), returning success=False but a nonzero pdf_count. Those files
+    are still real and still occupy those shipment slots, so gating the
+    bump on success would let the NEXT plan for that order collide with
+    them -- the tally is keyed off pdf_count alone, independent of whether
+    the plan is ultimately counted as filed or errored.
+    """
+    print("\n" + "=" * 70)
+    print("  AGENT 01B — INVOICE FILING — RUN")
+    print("=" * 70)
+
+    outcomes = {"total": len(plans), "filed_matched": 0, "filed_unmatched": 0, "error": 0}
+    if not plans:
+        print("\n  Nothing pending to file.")
+        return outcomes
+
+    print(f"\n  Filing {len(plans)} pending invoice(s)...\n")
+    filed_this_batch: dict[str, int] = {}  # order_id -> how many matched invoices already filed this run
+    for i, plan in enumerate(plans, 1):
+        if plan.get("matched") and plan.get("order_id"):
+            extra = filed_this_batch.get(plan["order_id"], 0)
+            if extra:
+                plan = dict(plan)  # don't mutate the shared plan list -- other code may still hold a reference
+                plan["next_shipment"] += extra
+                plan["filename"] = build_filename(
+                    plan["order_number"], plan["retailer_key"],
+                    plan["order_date_str"] or plan["date_str"],
+                    shipment_num=plan["next_shipment"],
+                )
+
+        label = (plan.get("subject") or "")[:55]
+        try:
+            success, pdf_count = _execute_filing(plan, gmail, drive, client)
+        except Exception as e:
+            print(f"  {i:>4}. ERROR filing {label}: {e}")
+            outcomes["error"] += 1
+            continue
+
+        # Bump by the number of shipment-number slots actually consumed in
+        # Drive (pdf_count), regardless of overall success/failure -- a
+        # ledger-write failure AFTER a successful Drive upload still leaves
+        # real files behind occupying those slots (see _execute_filing()'s
+        # docstring), so this must not be gated on `success`.
+        if plan.get("matched") and plan.get("order_id") and pdf_count:
+            filed_this_batch[plan["order_id"]] = filed_this_batch.get(plan["order_id"], 0) + pdf_count
+
+        if not success:
+            print(f"  {i:>4}. FAILED: {label} -- see error above.")
+            outcomes["error"] += 1
+        elif plan.get("matched"):
+            print(f"  {i:>4}. FILED (matched order {plan.get('order_number')}): {label}")
+            outcomes["filed_matched"] += 1
+        else:
+            print(f"  {i:>4}. FILED (unmatched): {label}")
+            outcomes["filed_unmatched"] += 1
+
+    print()
+    print("-" * 70)
+    print(
+        f"  Done. {outcomes['total']} processed | "
+        f"{outcomes['filed_matched']} filed & matched | "
+        f"{outcomes['filed_unmatched']} filed unmatched | "
+        f"{outcomes['error']} error(s)"
+    )
+    print("  Run --report anytime to see the full invoice_files ledger.")
+    return outcomes
 
 
 # --------------------------------------------------------------------------- #
@@ -1253,6 +1502,31 @@ def mode_create_safety_filter(gmail_personal) -> None:
 # Main
 # --------------------------------------------------------------------------- #
 
+def _connect_business_services():
+    """Shared connection helper for the non-interactive (--run/--preview)
+    path, added 2026-09-19, mirroring agent_01e_pdf_order_backfill.py's
+    _connect_drive(). Returns (gmail, drive) or (None, None) on failure --
+    never blocks on input. build_business_services() itself already fails
+    fast (sys.exit(1)) rather than prompting if the business token needs
+    re-consent (expired with no refresh_token) -- see _load_creds() above;
+    this wrapper just adds a plain-English message and lets the caller
+    decide the right exit behavior for its context (a non-zero exit code
+    for --run/--preview, so a scheduled Task Scheduler run visibly fails
+    instead of silently doing nothing; a plain return for the interactive
+    menu, where a human is already reading the error)."""
+    print("\n  Connecting to business Gmail and Drive...")
+    try:
+        gmail_biz, drive_biz = build_business_services()
+        print("  Connected.\n")
+        return gmail_biz, drive_biz
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"  ERROR connecting to Google APIs: {e}")
+        print("  Run: python setup_oauth.py --business")
+        return None, None
+
+
 def main():
     # Windows' default console encoding (cp1252) crashes on non-ASCII characters
     # (e.g. "→") used in several print() statements below. Reconfigure stdout to
@@ -1261,6 +1535,42 @@ def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
+    parser = argparse.ArgumentParser(
+        description="Agent 01B -- Invoice Filing (ResellOS)"
+    )
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--run", action="store_true",
+        help="Non-interactive: scan ResellOS-Invoices and file every pending invoice "
+             "directly. No prompts. Safe for Windows Task Scheduler -- see "
+             "SESSION_LOG.md/CONTEXT.md for setup steps.",
+    )
+    group.add_argument(
+        "--preview", action="store_true",
+        help="Non-interactive: scan and show the filing plan only, no writes. Prints the plan and exits.",
+    )
+    group.add_argument(
+        "--report", action="store_true",
+        help="Non-interactive: print the invoice_files ledger and exit.",
+    )
+    args = parser.parse_args()
+
+    if args.report:
+        client = get_client()
+        mode_ledger(client)
+        return
+
+    if args.run or args.preview:
+        client = get_client()
+        gmail_biz, drive_biz = _connect_business_services()
+        if gmail_biz is None:
+            sys.exit(1)
+        plans = mode_preview(gmail_biz, client)
+        if args.run:
+            mode_run_batch(plans, gmail_biz, drive_biz, client)
+        return
+
+    # No flags -- original interactive menu, unchanged for a manual session.
     print("\n" + "=" * 70)
     print("  RESELLOS — AGENT 01B: INVOICE FILING")
     print("=" * 70)
@@ -1273,6 +1583,9 @@ def main():
     print("  — PERSONAL GMAIL (one-time setup) —")
     print("  4. Personal backfill — copy historical LEGO emails to business Gmail")
     print("  5. Safety filter     — create personal Gmail filter for e.lego.com")
+    print()
+    print("  Tip: run with --run, --preview, or --report for a non-interactive pass")
+    print("  (e.g. from Windows Task Scheduler) that skips this menu entirely.")
     print()
 
     mode = get_input("Select mode (1/2/3/4/5)").strip()
@@ -1287,15 +1600,8 @@ def main():
 
     if mode in ("1", "2"):
         client = get_client()
-        print("\n  Connecting to business Gmail and Drive...")
-        try:
-            gmail_biz, drive_biz = build_business_services()
-            print("  Connected.\n")
-        except SystemExit:
-            raise
-        except Exception as e:
-            print(f"  ERROR connecting to Google APIs: {e}")
-            print("  Run: python setup_oauth.py --business")
+        gmail_biz, drive_biz = _connect_business_services()
+        if gmail_biz is None:
             return
         if mode == "1":
             mode_preview(gmail_biz, client)
